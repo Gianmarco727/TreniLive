@@ -670,7 +670,9 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                 Calendar.TUESDAY,
                 Calendar.WEDNESDAY,
                 Calendar.THURSDAY,
-                Calendar.FRIDAY
+                Calendar.FRIDAY,
+                Calendar.SATURDAY,
+                Calendar.SUNDAY
             )
         )
     }
