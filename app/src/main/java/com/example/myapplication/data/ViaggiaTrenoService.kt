@@ -49,6 +49,36 @@ object ViaggiaTrenoService {
         }
 
     /**
+     * Converte numeri romani per i binari programmati (es. "I" -> "1", "III" -> "3") in numeri arabi.
+     */
+    private fun formatPlatformNumber(platformStr: String): String {
+        val trimmed = platformStr.trim().uppercase()
+        return when (trimmed) {
+            "I" -> "1"
+            "II" -> "2"
+            "III" -> "3"
+            "IV" -> "4"
+            "V" -> "5"
+            "VI" -> "6"
+            "VII" -> "7"
+            "VIII" -> "8"
+            "IX" -> "9"
+            "X" -> "10"
+            "XI" -> "11"
+            "XII" -> "12"
+            "XIII" -> "13"
+            "XIV" -> "14"
+            "XV" -> "15"
+            "XVI" -> "16"
+            "XVII" -> "17"
+            "XVIII" -> "18"
+            "XIX" -> "19"
+            "XX" -> "20"
+            else -> platformStr.trim()
+        }
+    }
+
+    /**
      * Estrae in modo sicuro il valore del binario evitando stringhe "null" o chiavi assenti.
      */
     private fun extractPlatform(stopObj: JSONObject): Pair<String?, String?> {
@@ -56,7 +86,7 @@ object ViaggiaTrenoService {
             if (!stopObj.has(key) || stopObj.isNull(key)) return null
             val str = stopObj.optString(key, "").trim()
             if (str.isEmpty() || str.equals("null", ignoreCase = true)) return null
-            return str
+            return formatPlatformNumber(str)
         }
 
         val progPartenza = safeString("binarioProgrammatoPartenzaDescrizione")
