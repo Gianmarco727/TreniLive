@@ -5,6 +5,7 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -222,7 +223,6 @@ class TrainTrackerForegroundService : Service() {
         )
 
         val extras = Bundle().apply {
-            // Requisiti ufficiali Android 15/16/17 e Samsung One UI per la pillola/capsula nella barra di stato
             putBoolean("android.requestPromotedOngoing", true)
             putBoolean("android.promotedOngoing", true)
             if (chipText.isNotBlank()) {
@@ -231,35 +231,88 @@ class TrainTrackerForegroundService : Service() {
             putString("android.subText", "Live Tracker")
         }
 
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // Icona VETTORIALE richiesta dal sistema per la pillola
-            .setContentTitle(title)
-            .setContentText(shortContent)
-            .setSubText("Live Activity")
-            .setStyle(NotificationCompat.BigTextStyle().bigText(expandedContent))
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setProgress(100, progress, false)
-            .addExtras(extras)
-            .setContentIntent(openAppPendingIntent)
-            .addAction(R.drawable.ic_launcher_foreground, "Interrompi", stopPendingIntent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val builder = Notification.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setContentTitle(title)
+                .setContentText(shortContent)
+                .setSubText("Live Activity")
+                .setStyle(Notification.BigTextStyle().bigText(expandedContent))
+                .setCategory(Notification.CATEGORY_TRANSPORT)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setProgress(100, progress, false)
+                .setExtras(extras)
+                .setContentIntent(openAppPendingIntent)
+                .addAction(
+                    Notification.Action.Builder(
+                        Icon.createWithResource(this, R.drawable.ic_launcher_foreground),
+                        "Interrompi",
+                        stopPendingIntent
+                    ).build()
+                )
 
-        if (whenTimestamp > 0) {
-            builder.setWhen(whenTimestamp)
-            builder.setShowWhen(true)
+            if (whenTimestamp > 0) {
+                builder.setWhen(whenTimestamp)
+                builder.setShowWhen(true)
+            }
+
+            // Iniezione dei metodi nativi di Android 15/16/17 e Samsung One UI nel Builder prima del .build()
+            try {
+                val setPromotedMethod = builder.javaClass.methods.firstOrNull { it.name == "setRequestPromotedOngoing" }
+                setPromotedMethod?.invoke(builder, true)
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+
+            try {
+                val setShortTextMethod = builder.javaClass.methods.firstOrNull { it.name == "setShortCriticalText" }
+                setShortTextMethod?.invoke(builder, chipText)
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+
+            // Supporto Android 16/17 ProgressStyle
+            try {
+                val progressStyleClass = Class.forName("android.app.Notification\$ProgressStyle")
+                val progressStyle = progressStyleClass.getDeclaredConstructor().newInstance()
+                val setProgressMethod = progressStyleClass.getMethod("setProgress", Int::class.javaPrimitiveType)
+                setProgressMethod.invoke(progressStyle, progress)
+
+                val setStyleMethod = builder.javaClass.getMethod("setStyle", Class.forName("android.app.Notification\$Style"))
+                setStyleMethod.invoke(builder, progressStyle)
+            } catch (e: Throwable) {
+                // In caso di versioni precedenti, mantiene il BigTextStyle già impostato
+            }
+
+            val notification = builder.build()
+            notification.extras.putBoolean("android.requestPromotedOngoing", true)
+            notification.extras.putBoolean("android.promotedOngoing", true)
+            if (chipText.isNotBlank()) {
+                notification.extras.putString("android.shortCriticalText", chipText)
+            }
+            return notification
+        } else {
+            val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setContentTitle(title)
+                .setContentText(shortContent)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(expandedContent))
+                .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setProgress(100, progress, false)
+                .addExtras(extras)
+                .setContentIntent(openAppPendingIntent)
+                .addAction(R.drawable.ic_launcher_foreground, "Interrompi", stopPendingIntent)
+
+            if (whenTimestamp > 0) {
+                builder.setWhen(whenTimestamp)
+                builder.setShowWhen(true)
+            }
+
+            return builder.build()
         }
-
-        val notification = builder.build()
-
-        // Inserimento aggiuntivo diretto nei campi notification.extras
-        notification.extras.putBoolean("android.requestPromotedOngoing", true)
-        notification.extras.putBoolean("android.promotedOngoing", true)
-        if (chipText.isNotBlank()) {
-            notification.extras.putString("android.shortCriticalText", chipText)
-        }
-
-        return notification
     }
 
     @SuppressLint("MissingPermission")
@@ -288,9 +341,9 @@ class TrainTrackerForegroundService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_DEFAULT // IMPORTANCE_DEFAULT richiesta dal sistema per promuovere a pillola/capsula
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Notifica persistente per il monitoraggio live del treno"
+                description = "Notifica per il tracciamento live del treno con supporto a pillole e capsule nella barra di stato"
                 setShowBadge(true)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
@@ -306,7 +359,7 @@ class TrainTrackerForegroundService : Service() {
     }
 
     companion object {
-        const val CHANNEL_ID = "live_train_tracking_channel"
+        const val CHANNEL_ID = "live_train_tracking_channel_v2"
         const val CHANNEL_NAME = "Tracciamento Treni Live"
         const val NOTIFICATION_ID = 1001
 
