@@ -224,15 +224,18 @@ class TrainTrackerForegroundService : Service() {
         val extras = Bundle().apply {
             // Requisiti ufficiali Android 15/16/17 e Samsung One UI per la pillola/capsula nella barra di stato
             putBoolean("android.requestPromotedOngoing", true)
+            putBoolean("android.promotedOngoing", true)
             if (chipText.isNotBlank()) {
                 putString("android.shortCriticalText", chipText)
             }
+            putString("android.subText", "Live Tracker")
         }
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_launcher_foreground) // Icona VETTORIALE richiesta dal sistema per la pillola
             .setContentTitle(title)
             .setContentText(shortContent)
+            .setSubText("Live Activity")
             .setStyle(NotificationCompat.BigTextStyle().bigText(expandedContent))
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setOngoing(true)
@@ -240,14 +243,23 @@ class TrainTrackerForegroundService : Service() {
             .setProgress(100, progress, false)
             .addExtras(extras)
             .setContentIntent(openAppPendingIntent)
-            .addAction(R.mipmap.ic_launcher, "Interrompi", stopPendingIntent)
+            .addAction(R.drawable.ic_launcher_foreground, "Interrompi", stopPendingIntent)
 
         if (whenTimestamp > 0) {
             builder.setWhen(whenTimestamp)
             builder.setShowWhen(true)
         }
 
-        return builder.build()
+        val notification = builder.build()
+
+        // Inserimento aggiuntivo diretto nei campi notification.extras
+        notification.extras.putBoolean("android.requestPromotedOngoing", true)
+        notification.extras.putBoolean("android.promotedOngoing", true)
+        if (chipText.isNotBlank()) {
+            notification.extras.putString("android.shortCriticalText", chipText)
+        }
+
+        return notification
     }
 
     @SuppressLint("MissingPermission")
@@ -276,10 +288,11 @@ class TrainTrackerForegroundService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_DEFAULT // IMPORTANCE_DEFAULT richiesta dal sistema per promuovere a pillola/capsula
             ).apply {
                 description = "Notifica persistente per il monitoraggio live del treno"
-                setShowBadge(false)
+                setShowBadge(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
             val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
