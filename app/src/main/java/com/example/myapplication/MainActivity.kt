@@ -1456,4 +1456,4 @@ fun formatTime(timestampMs: Long?): String {
     if (timestampMs == null || timestampMs <= 0) return "--:--"
     val sdf = SimpleDateFormat("HH:mm", Locale.ITALY)
     return sdf.format(Date(timestampMs))
-}`
+}
