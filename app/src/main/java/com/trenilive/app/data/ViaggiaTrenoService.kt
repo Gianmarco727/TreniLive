@@ -368,21 +368,20 @@ object ViaggiaTrenoService {
     ): Boolean {
         var stops: List<TrainStop>? = null
 
-        if (departureTimestampMs > 0) {
-            val statusRes = fetchTrainStatus(trainNumber, originStationId, departureTimestampMs.toString())
+        // 1. Risolve il percorso ufficiale del treno
+        val resolveRes = resolveTrain(trainNumber)
+        if (resolveRes is ViaggiaTrenoResult.Success) {
+            val (num, depId, ts) = resolveRes.data
+            val statusRes = fetchTrainStatus(num, depId, ts)
             if (statusRes is ViaggiaTrenoResult.Success) {
                 stops = statusRes.data.stops
             }
         }
 
-        if (stops.isNullOrEmpty()) {
-            val resolveRes = resolveTrain(trainNumber)
-            if (resolveRes is ViaggiaTrenoResult.Success) {
-                val (num, depId, ts) = resolveRes.data
-                val statusRes = fetchTrainStatus(num, depId, ts)
-                if (statusRes is ViaggiaTrenoResult.Success) {
-                    stops = statusRes.data.stops
-                }
+        if (stops.isNullOrEmpty() && departureTimestampMs > 0) {
+            val statusRes = fetchTrainStatus(trainNumber, originStationId, departureTimestampMs.toString())
+            if (statusRes is ViaggiaTrenoResult.Success) {
+                stops = statusRes.data.stops
             }
         }
 
@@ -390,18 +389,23 @@ object ViaggiaTrenoService {
 
         val cleanOrigin = originNameQuery.trim().lowercase()
         val cleanDest = destinationNameQuery.trim().lowercase()
+        val cleanOriginId = originStationId.removePrefix("S").removePrefix("s")
 
-        val originIdx = stops.indexOfFirst {
-            it.stationId == originStationId ||
-                    it.stationName.lowercase().contains(cleanOrigin) ||
-                    (cleanOrigin.length >= 4 && it.stationName.lowercase().contains(cleanOrigin.take(4)))
+        // Trova l'indice della stazione di salita
+        val originIdx = stops.indexOfFirst { stop ->
+            val stopIdClean = stop.stationId.removePrefix("S").removePrefix("s")
+            stopIdClean == cleanOriginId ||
+                    stop.stationName.lowercase().equals(cleanOrigin, ignoreCase = true) ||
+                    stop.stationName.lowercase().contains(cleanOrigin)
         }
 
-        val destIdx = stops.indexOfFirst {
-            it.stationName.lowercase().contains(cleanDest) ||
-                    (cleanDest.length >= 4 && it.stationName.lowercase().contains(cleanDest.take(4)))
+        // Trova l'indice della stazione di discesa
+        val destIdx = stops.indexOfFirst { stop ->
+            stop.stationName.lowercase().equals(cleanDest, ignoreCase = true) ||
+                    stop.stationName.lowercase().contains(cleanDest)
         }
 
+        // Deve trovare ENTRAMBE le stazioni E la stazione di salita deve precedere quella di discesa
         return originIdx >= 0 && destIdx >= 0 && originIdx < destIdx
     }
 
