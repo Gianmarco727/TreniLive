@@ -6,9 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
-import android.media.MediaMetadata
-import android.media.session.MediaSession
-import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -32,31 +29,11 @@ class TrainTrackerForegroundService : Service() {
     private var activeTimestamp: String? = null
     private var isTracking = false
 
-    private var nativeMediaSession: MediaSession? = null
-
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        initMediaSession()
-    }
-
-    private fun initMediaSession() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                nativeMediaSession = MediaSession(this, "TreniLiveMediaSession").apply {
-                    isActive = true
-                    val state = PlaybackState.Builder()
-                        .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
-                        .setActions(PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_STOP)
-                        .build()
-                    setPlaybackState(state)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -94,7 +71,7 @@ class TrainTrackerForegroundService : Service() {
             shortContent = "Ricerca dati in tempo reale in corso...",
             expandedContent = "Ricerca dati in tempo reale in corso...",
             progress = 0,
-            chipText = "LIVETRAIN"
+            chipText = "TRENO"
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -206,20 +183,6 @@ class TrainTrackerForegroundService : Service() {
 
         val nextStopTimestamp = nextStop?.actualOrEstimatedTimeMs ?: 0L
 
-        // Aggiorna i metadati della MediaSession in modo che la pillola/capsula One UI mostri il titolo e la prossima fermata
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                val metadata = MediaMetadata.Builder()
-                    .putString(MediaMetadata.METADATA_KEY_TITLE, title)
-                    .putString(MediaMetadata.METADATA_KEY_ARTIST, shortContent)
-                    .putString(MediaMetadata.METADATA_KEY_ALBUM, "TreniLive Tracker")
-                    .build()
-                nativeMediaSession?.setMetadata(metadata)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-
         return buildNotification(
             title = title,
             shortContent = shortContent,
@@ -259,6 +222,7 @@ class TrainTrackerForegroundService : Service() {
         )
 
         val extras = Bundle().apply {
+            // Requisiti ufficiali Android 15/16/17 e Samsung One UI per la pillola/capsula nella barra di stato
             putBoolean("android.requestPromotedOngoing", true)
             putBoolean("android.promotedOngoing", true)
             if (chipText.isNotBlank()) {
@@ -282,20 +246,10 @@ class TrainTrackerForegroundService : Service() {
                 .addAction(
                     Notification.Action.Builder(
                         Icon.createWithResource(this, R.drawable.ic_launcher_foreground),
-                        "Interrompi",
+                        "Interrompi Monitoraggio",
                         stopPendingIntent
                     ).build()
                 )
-
-            // Applica la MediaStyle se presente la MediaSession nativa (meccanismo identico a YouTube Music / One UI Pill)
-            nativeMediaSession?.sessionToken?.let { token ->
-                val mediaStyle = Notification.MediaStyle()
-                    .setMediaSession(token)
-                    .setShowActionsInCompactView(0)
-                builder.setStyle(mediaStyle)
-            } ?: run {
-                builder.setStyle(Notification.BigTextStyle().bigText(expandedContent))
-            }
 
             if (whenTimestamp > 0) {
                 builder.setWhen(whenTimestamp)
@@ -317,6 +271,19 @@ class TrainTrackerForegroundService : Service() {
                 e.printStackTrace()
             }
 
+            // Supporto Android 16/17 ProgressStyle
+            try {
+                val progressStyleClass = Class.forName("android.app.Notification\$ProgressStyle")
+                val progressStyle = progressStyleClass.getDeclaredConstructor().newInstance()
+                val setProgressMethod = progressStyleClass.getMethod("setProgress", Int::class.javaPrimitiveType)
+                setProgressMethod.invoke(progressStyle, progress)
+
+                val setStyleMethod = builder.javaClass.getMethod("setStyle", Class.forName("android.app.Notification\$Style"))
+                setStyleMethod.invoke(builder, progressStyle)
+            } catch (e: Throwable) {
+                builder.setStyle(Notification.BigTextStyle().bigText(expandedContent))
+            }
+
             val notif = builder.build()
             notif.extras.putBoolean("android.requestPromotedOngoing", true)
             notif.extras.putBoolean("android.promotedOngoing", true)
@@ -336,7 +303,7 @@ class TrainTrackerForegroundService : Service() {
                 .setProgress(100, progress, false)
                 .addExtras(extras)
                 .setContentIntent(openAppPendingIntent)
-                .addAction(R.drawable.ic_launcher_foreground, "Interrompi", stopPendingIntent)
+                .addAction(R.drawable.ic_launcher_foreground, "Interrompi Monitoraggio", stopPendingIntent)
 
             if (whenTimestamp > 0) {
                 builder.setWhen(whenTimestamp)
@@ -346,7 +313,7 @@ class TrainTrackerForegroundService : Service() {
             builder.build()
         }
 
-        // Imposta i flag per rendere la notifica NON SWIPABILE (proprio come YouTube Music)
+        // Imposta i flag per rendere la notifica NON SWIPABILE
         notification.flags = notification.flags or
                 Notification.FLAG_ONGOING_EVENT or
                 Notification.FLAG_NO_CLEAR
@@ -365,15 +332,6 @@ class TrainTrackerForegroundService : Service() {
 
     private fun stopTracking() {
         isTracking = false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                nativeMediaSession?.isActive = false
-                nativeMediaSession?.release()
-                nativeMediaSession = null
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -381,15 +339,6 @@ class TrainTrackerForegroundService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         isTracking = false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                nativeMediaSession?.isActive = false
-                nativeMediaSession?.release()
-                nativeMediaSession = null
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
         serviceJob.cancel()
     }
 
@@ -416,7 +365,7 @@ class TrainTrackerForegroundService : Service() {
     }
 
     companion object {
-        const val CHANNEL_ID = "live_train_tracking_channel_v2"
+        const val CHANNEL_ID = "live_train_tracking_channel_v3"
         const val CHANNEL_NAME = "Tracciamento Treni Live"
         const val NOTIFICATION_ID = 1001
 
