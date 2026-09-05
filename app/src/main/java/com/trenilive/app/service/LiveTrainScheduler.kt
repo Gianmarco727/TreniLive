@@ -1,7 +1,7 @@
-package com.example.myapplication.service
+package com.trenilive.app.service
 
 import android.content.Context
-import com.example.myapplication.data.LiveTrainManager
+import com.trenilive.app.data.LiveTrainManager
 import java.util.Calendar
 
 object LiveTrainScheduler {

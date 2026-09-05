@@ -1,4 +1,4 @@
-package com.example.myapplication
+package com.trenilive.app
 
 import android.Manifest
 import android.app.DatePickerDialog
@@ -39,10 +39,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.example.myapplication.data.*
-import com.example.myapplication.service.LiveTrainScheduler
-import com.example.myapplication.service.TrainTrackerForegroundService
-import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.trenilive.app.data.*
+import com.trenilive.app.service.LiveTrainScheduler
+import com.trenilive.app.service.TrainTrackerForegroundService
+import com.trenilive.app.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*

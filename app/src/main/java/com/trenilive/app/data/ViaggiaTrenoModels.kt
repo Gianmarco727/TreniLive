@@ -1,4 +1,4 @@
-package com.example.myapplication.data
+package com.trenilive.app.data
 
 data class TrainStop(
     val stationName: String,

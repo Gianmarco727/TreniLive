@@ -21,7 +21,7 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.MyApplication">
         <activity
-            android:name=".MainActivity"
+            android:name="com.trenilive.app.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.MyApplication"
@@ -34,13 +34,25 @@
         </activity>
 
         <service
-            android:name=".service.TrainTrackerForegroundService"
+            android:name="com.trenilive.app.service.TrainTrackerForegroundService"
             android:foregroundServiceType="specialUse|dataSync"
             android:exported="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Real-time Trenitalia train tracking and live transit updates" />
         </service>
+
+        <receiver
+            android:name="com.trenilive.app.service.LiveTrainScheduler$BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name="com.trenilive.app.service.LiveTrainScheduler$AlarmReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

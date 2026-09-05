@@ -1,4 +1,4 @@
-package com.example.myapplication.service
+package com.trenilive.app.service
 
 import android.annotation.SuppressLint
 import android.app.*
@@ -14,12 +14,12 @@ import android.os.Bundle
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import com.example.myapplication.MainActivity
-import com.example.myapplication.R
-import com.example.myapplication.data.LiveTrainManager
-import com.example.myapplication.data.TrainStatus
-import com.example.myapplication.data.ViaggiaTrenoResult
-import com.example.myapplication.data.ViaggiaTrenoService
+import com.trenilive.app.MainActivity
+import com.trenilive.app.R
+import com.trenilive.app.data.LiveTrainManager
+import com.trenilive.app.data.TrainStatus
+import com.trenilive.app.data.ViaggiaTrenoResult
+import com.trenilive.app.data.ViaggiaTrenoService
 import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -50,7 +50,6 @@ class TrainTrackerForegroundService : Service() {
             try {
                 nativeMediaSession = MediaSession(this, "TreniLiveMediaSession").apply {
                     isActive = true
-                    // Attivato soltanto se abilitato da Opzioni Sviluppatore
                     val state = PlaybackState.Builder()
                         .setState(PlaybackState.STATE_NONE, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0.0f)
                         .setActions(0L)
@@ -308,7 +307,6 @@ class TrainTrackerForegroundService : Service() {
                     ).build()
                 )
 
-            // Se l'opzione MediaSession Bypass è stata attivata dalle Opzioni Sviluppatore
             nativeMediaSession?.sessionToken?.let { token ->
                 val mediaStyle = Notification.MediaStyle().setMediaSession(token)
                 builder.setStyle(mediaStyle)
@@ -320,7 +318,6 @@ class TrainTrackerForegroundService : Service() {
                 builder.setOnlyAlertOnce(true)
             }
 
-            // Orario prossima fermata e cronometro come da specifiche ufficiali Google Live Updates
             if (whenTimestamp > System.currentTimeMillis()) {
                 builder.setWhen(whenTimestamp)
                 builder.setShowWhen(true)
@@ -491,8 +488,8 @@ class TrainTrackerForegroundService : Service() {
         const val CHANNEL_NAME = "Tracciamento Treni Live"
         const val NOTIFICATION_ID = 1001
 
-        const val ACTION_START_TRACKING = "com.example.myapplication.START_TRACKING"
-        const val ACTION_STOP_TRACKING = "com.example.myapplication.STOP_TRACKING"
+        const val ACTION_START_TRACKING = "com.trenilive.app.START_TRACKING"
+        const val ACTION_STOP_TRACKING = "com.trenilive.app.STOP_TRACKING"
 
         const val EXTRA_TRAIN_NUMBER = "extra_train_number"
         const val EXTRA_STATION_ID = "extra_station_id"

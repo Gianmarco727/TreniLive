@@ -4,13 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.myapplication"
-    compileSdk {
-        version = release(37)
-    }
+    namespace = "com.trenilive.app"
+    compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.example.myapplication"
+        applicationId = "com.trenilive.app"
         minSdk = 31
         targetSdk = 37
         versionCode = 1
