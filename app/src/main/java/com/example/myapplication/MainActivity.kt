@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.data.*
@@ -644,17 +645,26 @@ fun TrainStatusCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         Text(
                             text = "${status.category} ${status.trainNumber}",
-                            fontSize = 22.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
-                        IconButton(onClick = onToggleFavorite) {
+                        IconButton(
+                            onClick = onToggleFavorite,
+                            modifier = Modifier.size(36.dp)
+                        ) {
                             Text(
                                 text = if (isFavorite) "❤️" else "🤍",
-                                fontSize = 22.sp
+                                fontSize = 20.sp
                             )
                         }
                     }
