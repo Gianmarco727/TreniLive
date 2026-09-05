@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.myapplication.data.*
+import com.example.myapplication.service.LiveTrainScheduler
 import com.example.myapplication.service.TrainTrackerForegroundService
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.launch
@@ -701,6 +702,8 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+        // Avvia il tracciamento automatico per i treni programmati per la giornata odierna
+        LiveTrainScheduler.checkAndStartScheduledTrains(context)
     }
 
     val dayOptions = listOf(
@@ -743,6 +746,16 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                                 liveTrains = liveManager.saveLiveTrain(newConfig)
                                 inputTrainNumber = ""
                                 addError = null
+
+                                // Se il treno è programmato per oggi, avvia SUBITO il tracciamento
+                                val todayDayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
+                                if (newConfig.isScheduledForDay(todayDayOfWeek)) {
+                                    TrainTrackerForegroundService.startService(
+                                        context = context,
+                                        trainNumber = newConfig.trainNumber,
+                                        stationId = newConfig.originStationId
+                                    )
+                                }
                             }
                             is ViaggiaTrenoResult.Error -> {
                                 addError = statusRes.message
@@ -1017,8 +1030,20 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
 
                             Switch(
                                 checked = config.isEnabled,
-                                onCheckedChange = {
+                                onCheckedChange = { isChecked ->
                                     liveTrains = liveManager.toggleTrainEnabled(config.id)
+                                    if (isChecked) {
+                                        val todayDayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
+                                        if (config.isScheduledForDay(todayDayOfWeek)) {
+                                            TrainTrackerForegroundService.startService(
+                                                context = context,
+                                                trainNumber = config.trainNumber,
+                                                stationId = config.originStationId
+                                            )
+                                        }
+                                    } else {
+                                        TrainTrackerForegroundService.stopService(context)
+                                    }
                                 }
                             )
                         }
@@ -1046,6 +1071,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
 
                             TextButton(onClick = {
                                 liveTrains = liveManager.removeLiveTrain(config.id)
+                                TrainTrackerForegroundService.stopService(context)
                             }) {
                                 Text("🗑️ Rimuovi", color = Color(0xFFD32F2F), fontSize = 12.sp)
                             }
