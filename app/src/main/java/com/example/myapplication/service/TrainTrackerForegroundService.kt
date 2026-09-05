@@ -6,13 +6,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
-import android.media.MediaMetadata
-import android.media.session.MediaSession
-import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import com.example.myapplication.MainActivity
 import com.example.myapplication.R
 import com.example.myapplication.data.TrainStatus
@@ -32,32 +30,11 @@ class TrainTrackerForegroundService : Service() {
     private var activeTimestamp: String? = null
     private var isTracking = false
 
-    private var nativeMediaSession: MediaSession? = null
-
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        initMediaSession()
-    }
-
-    private fun initMediaSession() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                nativeMediaSession = MediaSession(this, "TreniLiveMediaSession").apply {
-                    isActive = true
-                    // Imposta lo stato senza azioni di play/pause/seeking per non mostrare il pulsante pausa o la seekbar
-                    val state = PlaybackState.Builder()
-                        .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
-                        .setActions(0L) // 0 Azioni audio -> nessun pulsante pausa o seekbar!
-                        .build()
-                    setPlaybackState(state)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -95,14 +72,20 @@ class TrainTrackerForegroundService : Service() {
             shortContent = "Ricerca dati in tempo reale in corso...",
             expandedContent = "Ricerca dati in tempo reale in corso...",
             progress = 0,
-            chipText = "TRENO"
+            chipText = "TRENO",
+            isInitial = true
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            } else {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            }
             startForeground(
                 NOTIFICATION_ID,
                 initialNotification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                serviceType
             )
         } else {
             startForeground(NOTIFICATION_ID, initialNotification)
@@ -144,8 +127,7 @@ class TrainTrackerForegroundService : Service() {
             is ViaggiaTrenoResult.Success -> {
                 val status = statusRes.data
                 val notification = buildNotificationFromStatus(status)
-                val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-                notifySafely(notificationManager, NOTIFICATION_ID, notification)
+                notifySafely(notification)
 
                 if (status.progressPercentage >= 100 || status.isCancelled) {
                     delay(30_000)
@@ -164,10 +146,10 @@ class TrainTrackerForegroundService : Service() {
             shortContent = "Errore aggiornamento: $message",
             expandedContent = "Errore aggiornamento: $message",
             progress = 0,
-            chipText = "ERR"
+            chipText = "ERR",
+            isInitial = false
         )
-        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        notifySafely(notificationManager, NOTIFICATION_ID, notification)
+        notifySafely(notification)
     }
 
     private fun buildNotificationFromStatus(status: TrainStatus): Notification {
@@ -207,36 +189,26 @@ class TrainTrackerForegroundService : Service() {
 
         val nextStopTimestamp = nextStop?.actualOrEstimatedTimeMs ?: 0L
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                val metadata = MediaMetadata.Builder()
-                    .putString(MediaMetadata.METADATA_KEY_TITLE, title)
-                    .putString(MediaMetadata.METADATA_KEY_ARTIST, shortContent)
-                    .putString(MediaMetadata.METADATA_KEY_ALBUM, "TreniLive Tracker")
-                    .build()
-                nativeMediaSession?.setMetadata(metadata)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-
         return buildNotification(
             title = title,
             shortContent = shortContent,
             expandedContent = expandedContent,
             progress = status.progressPercentage,
             chipText = chipText,
-            whenTimestamp = nextStopTimestamp
+            whenTimestamp = nextStopTimestamp,
+            isInitial = false
         )
     }
 
+    @SuppressLint("NewApi")
     private fun buildNotification(
         title: String,
         shortContent: String,
         expandedContent: String,
         progress: Int,
         chipText: String = "",
-        whenTimestamp: Long = 0L
+        whenTimestamp: Long = 0L,
+        isInitial: Boolean = false
     ): Notification {
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -265,91 +237,129 @@ class TrainTrackerForegroundService : Service() {
                 putString("android.shortCriticalText", chipText)
             }
             putString("android.subText", "Live Tracker")
+            putBoolean("com.samsung.android.notification.live", true)
+            putBoolean("com.samsung.android.notification.promoted", true)
         }
 
         val notification: Notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val builder = Notification.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setSmallIcon(R.drawable.ic_train_mono)
                 .setContentTitle(title)
                 .setContentText(shortContent)
                 .setSubText("Live Activity")
-                .setCategory(Notification.CATEGORY_NAVIGATION)
+                .setCategory(Notification.CATEGORY_TRANSPORT)
                 .setOngoing(true)
-                .setOnlyAlertOnce(true)
                 .setProgress(100, progress, false)
                 .setExtras(extras)
                 .setContentIntent(openAppPendingIntent)
                 .addAction(
                     Notification.Action.Builder(
-                        Icon.createWithResource(this, R.drawable.ic_launcher_foreground),
-                        "Interrompi Monitoraggio",
+                        Icon.createWithResource(this, R.drawable.ic_train_mono),
+                        "Apri App",
+                        openAppPendingIntent
+                    ).build()
+                )
+                .addAction(
+                    Notification.Action.Builder(
+                        Icon.createWithResource(this, R.drawable.ic_train_mono),
+                        "Interrompi",
                         stopPendingIntent
                     ).build()
                 )
 
-            nativeMediaSession?.sessionToken?.let { token ->
-                val mediaStyle = Notification.MediaStyle()
-                    .setMediaSession(token)
-                    .setShowActionsInCompactView(0)
-                builder.setStyle(mediaStyle)
-            } ?: run {
-                builder.setStyle(Notification.BigTextStyle().bigText(expandedContent))
+            if (!isInitial) {
+                builder.setOnlyAlertOnce(true)
             }
 
-            if (whenTimestamp > System.currentTimeMillis()) {
+            if (whenTimestamp > 0) {
                 builder.setWhen(whenTimestamp)
                 builder.setShowWhen(true)
-                builder.setUsesChronometer(true)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    builder.setChronometerCountDown(true)
+            }
+
+            // Invocazione nativa diretta sui metodi del framework per API 35+
+            if (Build.VERSION.SDK_INT >= 35) {
+                try {
+                    builder.setRequestPromotedOngoing(true)
+                } catch (e: Throwable) {
+                    extras.putBoolean("android.requestPromotedOngoing", true)
+                }
+
+                if (chipText.isNotBlank()) {
+                    try {
+                        builder.setShortCriticalText(chipText)
+                    } catch (e: Throwable) {
+                        extras.putString("android.shortCriticalText", chipText)
+                    }
+                }
+            } else {
+                try {
+                    val setPromotedMethod = builder.javaClass.methods.firstOrNull { it.name == "setRequestPromotedOngoing" }
+                    setPromotedMethod?.invoke(builder, true)
+                } catch (e: Throwable) {
+                    extras.putBoolean("android.requestPromotedOngoing", true)
+                }
+
+                try {
+                    val setShortTextMethod = builder.javaClass.methods.firstOrNull { it.name == "setShortCriticalText" }
+                    setShortTextMethod?.invoke(builder, chipText)
+                } catch (e: Throwable) {
+                    extras.putString("android.shortCriticalText", chipText)
                 }
             }
 
-            try {
-                val setPromotedMethod = builder.javaClass.methods.firstOrNull { it.name == "setRequestPromotedOngoing" }
-                setPromotedMethod?.invoke(builder, true)
-            } catch (e: Throwable) {
-                e.printStackTrace()
-            }
+            // Supporto per il nuovo template Android 16+ ProgressStyle
+            if (Build.VERSION.SDK_INT >= 36) {
+                try {
+                    val progressStyleClass = Class.forName("android.app.Notification\$ProgressStyle")
+                    val progressStyle = progressStyleClass.getDeclaredConstructor().newInstance()
+                    val setProgressMethod = progressStyleClass.getMethod("setProgress", Int::class.javaPrimitiveType)
+                    setProgressMethod.invoke(progressStyle, progress)
 
-            try {
-                val setShortTextMethod = builder.javaClass.methods.firstOrNull { it.name == "setShortCriticalText" }
-                setShortTextMethod?.invoke(builder, chipText)
-            } catch (e: Throwable) {
-                e.printStackTrace()
+                    val setStyleMethod = builder.javaClass.getMethod("setStyle", Class.forName("android.app.Notification\$Style"))
+                    setStyleMethod.invoke(builder, progressStyle)
+                } catch (e: Throwable) {
+                    builder.setStyle(Notification.BigTextStyle().bigText(expandedContent))
+                }
+            } else {
+                builder.setStyle(Notification.BigTextStyle().bigText(expandedContent))
             }
 
             val notif = builder.build()
             notif.extras.putBoolean("android.requestPromotedOngoing", true)
             notif.extras.putBoolean("android.promotedOngoing", true)
+            notif.extras.putBoolean("com.samsung.android.notification.live", true)
+            notif.extras.putBoolean("com.samsung.android.notification.promoted", true)
             if (chipText.isNotBlank()) {
                 notif.extras.putString("android.shortCriticalText", chipText)
             }
             notif
         } else {
             val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setSmallIcon(R.drawable.ic_train_mono)
                 .setContentTitle(title)
                 .setContentText(shortContent)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(expandedContent))
-                .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
+                .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
                 .setOngoing(true)
-                .setOnlyAlertOnce(true)
                 .setProgress(100, progress, false)
                 .addExtras(extras)
+                .setDeleteIntent(stopPendingIntent)
                 .setContentIntent(openAppPendingIntent)
-                .addAction(R.drawable.ic_launcher_foreground, "Interrompi Monitoraggio", stopPendingIntent)
+                .addAction(R.drawable.ic_train_mono, "Apri App", openAppPendingIntent)
+                .addAction(R.drawable.ic_train_mono, "Interrompi", stopPendingIntent)
 
-            if (whenTimestamp > System.currentTimeMillis()) {
+            if (!isInitial) {
+                builder.setOnlyAlertOnce(true)
+            }
+
+            if (whenTimestamp > 0) {
                 builder.setWhen(whenTimestamp)
                 builder.setShowWhen(true)
-                builder.setUsesChronometer(true)
             }
 
             builder.build()
         }
 
-        // Blocco rigido per rendere la notifica NON SWIPABILE
         notification.flags = notification.flags or
                 Notification.FLAG_ONGOING_EVENT or
                 Notification.FLAG_NO_CLEAR
@@ -358,9 +368,9 @@ class TrainTrackerForegroundService : Service() {
     }
 
     @SuppressLint("MissingPermission")
-    private fun notifySafely(notificationManager: NotificationManager, id: Int, notification: Notification) {
+    private fun notifySafely(notification: Notification) {
         try {
-            notificationManager.notify(id, notification)
+            NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -368,15 +378,6 @@ class TrainTrackerForegroundService : Service() {
 
     private fun stopTracking() {
         isTracking = false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                nativeMediaSession?.isActive = false
-                nativeMediaSession?.release()
-                nativeMediaSession = null
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -384,15 +385,6 @@ class TrainTrackerForegroundService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         isTracking = false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                nativeMediaSession?.isActive = false
-                nativeMediaSession?.release()
-                nativeMediaSession = null
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
         serviceJob.cancel()
     }
 
@@ -401,9 +393,9 @@ class TrainTrackerForegroundService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Notifica per il tracciamento live del treno con supporto a pillole e capsule nella barra di stato"
+                description = "Notifica ad alta priorità per il tracciamento live del treno e supporto a capsule nella barra di stato"
                 setShowBadge(true)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
@@ -419,7 +411,7 @@ class TrainTrackerForegroundService : Service() {
     }
 
     companion object {
-        const val CHANNEL_ID = "live_train_tracking_channel_v4"
+        const val CHANNEL_ID = "live_train_tracking_channel_v11"
         const val CHANNEL_NAME = "Tracciamento Treni Live"
         const val NOTIFICATION_ID = 1001
 

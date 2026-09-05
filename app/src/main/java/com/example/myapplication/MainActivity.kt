@@ -3,9 +3,12 @@ package com.example.myapplication
 import android.Manifest
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -708,6 +711,24 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
         LiveTrainScheduler.checkAndStartScheduledTrains(context)
     }
 
+    val openSystemPromotedSettings = {
+        try {
+            val intent = Intent("android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS").apply {
+                data = Uri.parse("package:${context.packageName}")
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            try {
+                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                }
+                context.startActivity(intent)
+            } catch (e2: Exception) {
+                e2.printStackTrace()
+            }
+        }
+    }
+
     val dayOptions = listOf(
         Calendar.MONDAY to "LUN",
         Calendar.TUESDAY to "MAR",
@@ -789,8 +810,23 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
             text = "I treni salvati qui attivano automaticamente la notifica Live Ongoing nei giorni programmati.",
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
         )
+
+        // Pulsante di accesso rapido alle impostazioni di sistema per le Notifiche Live Samsung One UI
+        OutlinedButton(
+            onClick = { openSystemPromotedSettings() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(
+                text = "⚙️ Abilita 'Notifiche Live' in Impostazioni Samsung",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
             Surface(
