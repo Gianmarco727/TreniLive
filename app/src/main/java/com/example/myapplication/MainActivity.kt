@@ -1,0 +1,889 @@
+package com.example.myapplication
+
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.myapplication.data.*
+import com.example.myapplication.ui.theme.MyApplicationTheme
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.*
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            MyApplicationTheme {
+                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                    TrainTrackerScreen(modifier = Modifier.padding(innerPadding))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TrainTrackerScreen(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val favoritesManager = remember { FavoritesManager(context) }
+    var favoriteList by remember { mutableStateOf(favoritesManager.getFavoriteTrains()) }
+
+    var trainNumberInput by remember { mutableStateOf("") }
+
+    // Campi stazioni per la ricerca
+    var originQuery by remember { mutableStateOf("") }
+    var selectedOriginStation by remember { mutableStateOf<StationInfo?>(null) }
+    var originSuggestions by remember { mutableStateOf<List<StationInfo>>(emptyList()) }
+
+    var destinationQuery by remember { mutableStateOf("") }
+    var selectedDestinationStation by remember { mutableStateOf<StationInfo?>(null) }
+    var destinationSuggestions by remember { mutableStateOf<List<StationInfo>>(emptyList()) }
+
+    // Data e Ora selezionate (in millisecondi)
+    var selectedDateMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    // Stati di caricamento e risultati
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var trainStatus by remember { mutableStateOf<TrainStatus?>(null) }
+    var stationSolutions by remember { mutableStateOf<List<StationDeparture>>(emptyList()) }
+
+    val coroutineScope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+
+    // Funzione ricerca diretta per numero di treno
+    val searchByTrainNumber = { numberToSearch: String ->
+        focusManager.clearFocus()
+        val trimmed = numberToSearch.trim()
+        if (trimmed.isNotBlank()) {
+            errorMessage = null
+            isLoading = true
+
+            coroutineScope.launch {
+                when (val resolveRes = ViaggiaTrenoService.resolveTrain(trimmed)) {
+                    is ViaggiaTrenoResult.Success -> {
+                        val (num, stationId, timestamp) = resolveRes.data
+                        when (val statusRes = ViaggiaTrenoService.fetchTrainStatus(num, stationId, timestamp)) {
+                            is ViaggiaTrenoResult.Success -> {
+                                trainStatus = statusRes.data
+                            }
+                            is ViaggiaTrenoResult.Error -> {
+                                errorMessage = statusRes.message
+                            }
+                        }
+                    }
+                    is ViaggiaTrenoResult.Error -> {
+                        errorMessage = resolveRes.message
+                    }
+                }
+                isLoading = false
+            }
+        }
+    }
+
+    // Funzione ricerca dettagli per una specifica partenza trovata nella lista (gestisce correttamente i treni di domani)
+    val searchByDeparture = { dep: StationDeparture ->
+        focusManager.clearFocus()
+        errorMessage = null
+        isLoading = true
+
+        coroutineScope.launch {
+            when (val statusRes = ViaggiaTrenoService.fetchTrainStatusForDeparture(
+                trainNumber = dep.trainNumber,
+                departureStationId = dep.originStationId,
+                departureTimestampMs = dep.departureTimestampMs
+            )) {
+                is ViaggiaTrenoResult.Success -> {
+                    trainStatus = statusRes.data
+                }
+                is ViaggiaTrenoResult.Error -> {
+                    errorMessage = statusRes.message
+                }
+            }
+            isLoading = false
+        }
+    }
+
+    // Funzione ricerca soluzioni per stazione e orario
+    val searchByStations = {
+        focusManager.clearFocus()
+        val originName = originQuery.trim()
+        val destName = destinationQuery.trim()
+
+        if (originName.isEmpty()) {
+            errorMessage = "La Stazione di Partenza è obbligatoria."
+        } else if (destName.isEmpty()) {
+            errorMessage = "La Stazione di Arrivo è obbligatoria per la ricerca per tratta."
+        } else {
+            errorMessage = null
+            isLoading = true
+            trainStatus = null
+            stationSolutions = emptyList()
+
+            coroutineScope.launch {
+                var originStation = selectedOriginStation
+                if (originStation == null) {
+                    when (val autoRes = ViaggiaTrenoService.autocompleteStation(originName)) {
+                        is ViaggiaTrenoResult.Success -> {
+                            originStation = autoRes.data.firstOrNull()
+                        }
+                        is ViaggiaTrenoResult.Error -> {}
+                    }
+                }
+
+                if (originStation == null) {
+                    errorMessage = "Impossibile trovare la stazione di partenza '$originName'."
+                    isLoading = false
+                    return@launch
+                }
+
+                val searchDate = Date(selectedDateMs)
+                when (val routeRes = ViaggiaTrenoService.fetchRouteSolutions(
+                    originStationId = originStation.id,
+                    originNameQuery = originName,
+                    destinationQuery = destName,
+                    date = searchDate,
+                    minSolutions = 5
+                )) {
+                    is ViaggiaTrenoResult.Success -> {
+                        stationSolutions = routeRes.data
+                        if (stationSolutions.isEmpty()) {
+                            val timeStr = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.ITALY).format(searchDate)
+                            errorMessage = "Nessun treno trovato tra ${originStation.name} e $destName a partire dal $timeStr."
+                        }
+                    }
+                    is ViaggiaTrenoResult.Error -> {
+                        errorMessage = routeRes.message
+                    }
+                }
+                isLoading = false
+            }
+        }
+    }
+
+    // Picker Data e Ora
+    val showDatePicker = {
+        val cal = Calendar.getInstance().apply { timeInMillis = selectedDateMs }
+        DatePickerDialog(
+            context,
+            { _, year, month, day ->
+                val newCal = Calendar.getInstance().apply { timeInMillis = selectedDateMs }
+                newCal.set(Calendar.YEAR, year)
+                newCal.set(Calendar.MONTH, month)
+                newCal.set(Calendar.DAY_OF_MONTH, day)
+                selectedDateMs = newCal.timeInMillis
+            },
+            cal.get(Calendar.YEAR),
+            cal.get(Calendar.MONTH),
+            cal.get(Calendar.DAY_OF_MONTH)
+        ).show()
+    }
+
+    val showTimePicker = {
+        val cal = Calendar.getInstance().apply { timeInMillis = selectedDateMs }
+        TimePickerDialog(
+            context,
+            { _, hour, minute ->
+                val newCal = Calendar.getInstance().apply { timeInMillis = selectedDateMs }
+                newCal.set(Calendar.HOUR_OF_DAY, hour)
+                newCal.set(Calendar.MINUTE, minute)
+                selectedDateMs = newCal.timeInMillis
+            },
+            cal.get(Calendar.HOUR_OF_DAY),
+            cal.get(Calendar.MINUTE),
+            true
+        ).show()
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        horizontalAlignment = Alignment.Start
+    ) {
+        // Header
+        Text(
+            text = "Trenitalia Tracker",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Text(
+            text = "Cerca per Numero Treno o per Tratta Completa",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+        )
+
+        // BARRA PREFERITI SALVATI ❤️
+        if (favoriteList.isNotEmpty()) {
+            Text(
+                text = "I MIEI PREFERITI",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 0.5.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                favoriteList.forEach { favNum ->
+                    SuggestionChip(
+                        onClick = {
+                            trainNumberInput = favNum
+                            searchByTrainNumber(favNum)
+                        },
+                        label = { Text("❤️ $favNum", fontWeight = FontWeight.Bold) },
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                        )
+                    )
+                }
+            }
+        }
+
+        // CARD DI RICERCA UNIFICATA
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+
+                // Opzione 1: Ricerca per Numero Treno
+                Text(
+                    text = "1. RICERCA DIRETTA PER NUMERO TRENO",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = trainNumberInput,
+                    onValueChange = { trainNumberInput = it },
+                    placeholder = { Text("Es. 9410, 16022, 16016") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Search
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onSearch = { searchByTrainNumber(trainNumberInput) }
+                    ),
+                    trailingIcon = {
+                        if (trainNumberInput.isNotBlank()) {
+                            IconButton(onClick = { trainNumberInput = "" }) {
+                                Text("✖", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                if (trainNumberInput.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { searchByTrainNumber(trainNumberInput) },
+                        enabled = !isLoading,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E))
+                    ) {
+                        Text("Cerca Treno $trainNumberInput", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+                // Opzione 2: Ricerca per Stazioni e Tratta
+                Text(
+                    text = "2. OPPURE CERCA PER TRATTA (OBBLIGATORI PARTENZA E ARRIVO)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Stazione Partenza (con Autocomplete)
+                OutlinedTextField(
+                    value = originQuery,
+                    onValueChange = { query ->
+                        originQuery = query
+                        selectedOriginStation = null
+                        trainNumberInput = "" // Svuota il numero treno per evitare conflitti
+                        if (query.length >= 2) {
+                            coroutineScope.launch {
+                                when (val res = ViaggiaTrenoService.autocompleteStation(query)) {
+                                    is ViaggiaTrenoResult.Success -> {
+                                        originSuggestions = res.data
+                                    }
+                                    is ViaggiaTrenoResult.Error -> {}
+                                }
+                            }
+                        } else {
+                            originSuggestions = emptyList()
+                        }
+                    },
+                    placeholder = { Text("Stazione Partenza (es. Conegliano)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                // Autocomplete Partenza
+                if (originSuggestions.isNotEmpty() && selectedOriginStation == null) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        shadowElevation = 4.dp
+                    ) {
+                        Column {
+                            originSuggestions.take(5).forEach { station ->
+                                Text(
+                                    text = station.name,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedOriginStation = station
+                                            originQuery = station.name
+                                            originSuggestions = emptyList()
+                                        }
+                                        .padding(12.dp),
+                                    fontSize = 14.sp
+                                )
+                                HorizontalDivider()
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Stazione Arrivo (con Autocomplete)
+                OutlinedTextField(
+                    value = destinationQuery,
+                    onValueChange = { query ->
+                        destinationQuery = query
+                        selectedDestinationStation = null
+                        trainNumberInput = "" // Svuota il numero treno per evitare conflitti
+                        if (query.length >= 2) {
+                            coroutineScope.launch {
+                                when (val res = ViaggiaTrenoService.autocompleteStation(query)) {
+                                    is ViaggiaTrenoResult.Success -> {
+                                        destinationSuggestions = res.data
+                                    }
+                                    is ViaggiaTrenoResult.Error -> {}
+                                }
+                            }
+                        } else {
+                            destinationSuggestions = emptyList()
+                        }
+                    },
+                    placeholder = { Text("Stazione Arrivo (es. Pordenone)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                // Autocomplete Arrivo
+                if (destinationSuggestions.isNotEmpty() && selectedDestinationStation == null) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        shadowElevation = 4.dp
+                    ) {
+                        Column {
+                            destinationSuggestions.take(5).forEach { station ->
+                                Text(
+                                    text = station.name,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedDestinationStation = station
+                                            destinationQuery = station.name
+                                            destinationSuggestions = emptyList()
+                                        }
+                                        .padding(12.dp),
+                                    fontSize = 14.sp
+                                )
+                                HorizontalDivider()
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Selezione Data & Ora
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = showDatePicker,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            text = "📅 " + SimpleDateFormat("dd/MM/yyyy", Locale.ITALY).format(Date(selectedDateMs)),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = showTimePicker,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            text = "⏰ " + SimpleDateFormat("HH:mm", Locale.ITALY).format(Date(selectedDateMs)),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                errorMessage?.let { error ->
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = error,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Pulsante di Ricerca Soluzioni Tratta
+                Button(
+                    onClick = { searchByStations() },
+                    enabled = !isLoading,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E))
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text(
+                            text = "Cerca Soluzioni Tratta",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        // SCHEDA DETTAGLIO TRENO SELEZIONATO IN TEMPO REALE
+        AnimatedVisibility(
+            visible = trainStatus != null && !isLoading,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            trainStatus?.let { status ->
+                Spacer(modifier = Modifier.height(20.dp))
+                TrainStatusCard(
+                    status = status,
+                    isFavorite = favoritesManager.isFavorite(status.trainNumber),
+                    onToggleFavorite = {
+                        favoritesManager.toggleFavorite(status.trainNumber)
+                        favoriteList = favoritesManager.getFavoriteTrains()
+                    },
+                    onCloseDetail = {
+                        trainStatus = null
+                    },
+                    userBoardingStation = originQuery,
+                    userAlightingStation = destinationQuery
+                )
+            }
+        }
+
+        // LISTA SOLUZIONI TROVATE
+        if (stationSolutions.isNotEmpty() && !isLoading) {
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                text = "PROSSIMI TRENI DISPONIBILI DALL'ORARIO SELEZIONATO (${stationSolutions.size})",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            stationSolutions.forEach { departure ->
+                val isCurrentlySelected = trainStatus?.trainNumber == departure.trainNumber
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp)
+                        .clickable {
+                            searchByDeparture(departure)
+                        },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isCurrentlySelected) Color(0xFFFFF0F2) else MaterialTheme.colorScheme.surface
+                    ),
+                    border = if (isCurrentlySelected) androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFC8102E)) else null,
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "${departure.category} ${departure.trainNumber}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = if (isCurrentlySelected) Color(0xFFC8102E) else MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "➔ ${departure.destination}",
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = departure.departureTimeFormatted,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = if (departure.delayMinutes > 0) "+${departure.delayMinutes} min" else "In orario",
+                                color = if (departure.delayMinutes > 0) Color(0xFFE65100) else Color(0xFF2E7D32),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TrainStatusCard(
+    status: TrainStatus,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
+    onCloseDetail: () -> Unit,
+    userBoardingStation: String,
+    userAlightingStation: String
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            // Header: Categoria/Numero + Preferito ❤️ + Bottone Chiudi ✖ + Badge Ritardo
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "${status.category} ${status.trainNumber}",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        IconButton(onClick = onToggleFavorite) {
+                            Text(
+                                text = if (isFavorite) "❤️" else "🤍",
+                                fontSize = 22.sp
+                            )
+                        }
+                    }
+                    Text(
+                        text = "${status.originStationName} ➔ ${status.destinationStationName}",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val (delayColor, delayText) = when {
+                        status.isCancelled -> Color(0xFFD32F2F) to "SOPPRESSO"
+                        status.delayMinutes > 0 -> Color(0xFFE65100) to "+${status.delayMinutes} min"
+                        status.delayMinutes < 0 -> Color(0xFF2E7D32) to "${status.delayMinutes} min"
+                        else -> Color(0xFF2E7D32) to "IN ORARIO"
+                    }
+
+                    Surface(
+                        color = delayColor.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(20.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, delayColor)
+                    ) {
+                        Text(
+                            text = delayText,
+                            color = delayColor,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    // Bottone Chiudi Dettaglio ✖
+                    OutlinedButton(
+                        onClick = onCloseDetail,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Text("✖", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // Ultimo Rilevamento
+            Text(
+                text = "ULTIMO RILEVAMENTO",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 0.5.sp
+            )
+            Text(
+                text = status.lastDetectedStation,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
+            )
+
+            // Prossima Fermata
+            status.nextStop?.let { next ->
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "PROSSIMA FERMATA",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = next.stationName,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            next.actualPlatform?.let { platform ->
+                                Text(
+                                    text = "Binario: $platform",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = formatTime(next.actualOrEstimatedTimeMs),
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Barra di Progresso Avanzamento Viaggio
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Avanzamento Treno Totale",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "${status.progressPercentage}%",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            LinearProgressIndicator(
+                progress = { status.progressPercentage / 100f },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .padding(top = 6.dp),
+                color = Color(0xFFC8102E),
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            )
+
+            // Evidenziazione Tratta Utente con Binari di Salita e Discesa
+            if (userBoardingStation.isNotBlank() || userAlightingStation.isNotBlank()) {
+                val stopsCount = status.stops.size
+                if (stopsCount > 1) {
+                    val boardingIdx = status.stops.indexOfFirst {
+                        it.stationName.contains(userBoardingStation, ignoreCase = true)
+                    }.takeIf { it >= 0 } ?: 0
+
+                    val alightingIdx = status.stops.indexOfFirst {
+                        it.stationName.contains(userAlightingStation, ignoreCase = true)
+                    }.takeIf { it >= 0 } ?: (stopsCount - 1)
+
+                    val boardingStop = status.stops.getOrNull(boardingIdx)
+                    val alightingStop = status.stops.getOrNull(alightingIdx)
+
+                    val boardingPlatform = boardingStop?.actualPlatform ?: boardingStop?.scheduledPlatform
+                    val alightingPlatform = alightingStop?.actualPlatform ?: alightingStop?.scheduledPlatform
+
+                    val startPct = (boardingIdx.toFloat() / (stopsCount - 1)) * 100
+                    val endPct = (alightingIdx.toFloat() / (stopsCount - 1)) * 100
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "TRATTA SELEZIONATA DA TE",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "Salita: ${boardingStop?.stationName ?: userBoardingStation}",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                boardingPlatform?.let { p ->
+                                    Text(
+                                        text = "Binario $p",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF2E7D32)
+                                    )
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "Discesa: ${alightingStop?.stationName ?: userAlightingStation}",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                alightingPlatform?.let { p ->
+                                    Text(
+                                        text = "Binario $p",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF2E7D32)
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "Posizione nel percorso: dal ${startPct.toInt()}% al ${endPct.toInt()}% del percorso totale",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun formatTime(timestampMs: Long?): String {
+    if (timestampMs == null || timestampMs <= 0) return "--:--"
+    val sdf = SimpleDateFormat("HH:mm", Locale.ITALY)
+    return sdf.format(Date(timestampMs))
+}
