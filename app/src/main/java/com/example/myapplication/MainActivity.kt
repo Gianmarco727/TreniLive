@@ -268,7 +268,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
     ) {
         // Header
         Text(
-            text = "Trenitalia Tracker",
+            text = "TreniLive",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
