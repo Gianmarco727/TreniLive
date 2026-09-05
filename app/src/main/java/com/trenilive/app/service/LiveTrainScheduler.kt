@@ -1,8 +1,24 @@
 package com.trenilive.app.service
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
 import com.trenilive.app.data.LiveTrainManager
 import java.util.Calendar
+
+class BootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+            LiveTrainScheduler.checkAndStartScheduledTrains(context)
+        }
+    }
+}
+
+class AlarmReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        LiveTrainScheduler.checkAndStartScheduledTrains(context)
+    }
+}
 
 object LiveTrainScheduler {
 
