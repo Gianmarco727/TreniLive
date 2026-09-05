@@ -72,7 +72,7 @@ class TrainTrackerForegroundService : Service() {
             shortContent = "Ricerca dati in tempo reale in corso...",
             expandedContent = "Ricerca dati in tempo reale in corso...",
             progress = 0,
-            chipText = "TRENO",
+            chipText = "OK",
             isInitial = true
         )
 
@@ -160,10 +160,11 @@ class TrainTrackerForegroundService : Service() {
             else -> "• In orario"
         }
 
+        // Testo specifico per il chip della barra di stato: OK, +5, -4, SOPPR
         val chipText = when {
-            status.isCancelled -> "SOPPR."
-            status.delayMinutes > 0 -> "+${status.delayMinutes}m"
-            status.delayMinutes < 0 -> "${status.delayMinutes}m"
+            status.isCancelled -> "SOPPR"
+            status.delayMinutes > 0 -> "+${status.delayMinutes}"
+            status.delayMinutes < 0 -> "${status.delayMinutes}"
             else -> "OK"
         }
 
@@ -276,7 +277,6 @@ class TrainTrackerForegroundService : Service() {
                 builder.setShowWhen(true)
             }
 
-            // Invocazione nativa diretta sui metodi del framework per API 35+
             if (Build.VERSION.SDK_INT >= 35) {
                 try {
                     builder.setRequestPromotedOngoing(true)
@@ -307,7 +307,6 @@ class TrainTrackerForegroundService : Service() {
                 }
             }
 
-            // Supporto per il nuovo template Android 16+ ProgressStyle
             if (Build.VERSION.SDK_INT >= 36) {
                 try {
                     val progressStyleClass = Class.forName("android.app.Notification\$ProgressStyle")
