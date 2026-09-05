@@ -16,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.myapplication.MainActivity
 import com.example.myapplication.R
+import com.example.myapplication.data.LiveTrainManager
 import com.example.myapplication.data.TrainStatus
 import com.example.myapplication.data.ViaggiaTrenoResult
 import com.example.myapplication.data.ViaggiaTrenoService
@@ -44,11 +45,12 @@ class TrainTrackerForegroundService : Service() {
     }
 
     private fun initMediaSession() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        val liveManager = LiveTrainManager(this)
+        if (liveManager.isMediaSessionBypassEnabled() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             try {
                 nativeMediaSession = MediaSession(this, "TreniLiveMediaSession").apply {
                     isActive = true
-                    // STATE_NONE con 0 azioni in modo che One UI attivi la pillola nella barra di stato senza mostrare controlli audio
+                    // Attivato soltanto se abilitato da Opzioni Sviluppatore
                     val state = PlaybackState.Builder()
                         .setState(PlaybackState.STATE_NONE, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0.0f)
                         .setActions(0L)
@@ -58,6 +60,8 @@ class TrainTrackerForegroundService : Service() {
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        } else {
+            nativeMediaSession = null
         }
     }
 
@@ -96,7 +100,7 @@ class TrainTrackerForegroundService : Service() {
             shortContent = "Ricerca dati in tempo reale in corso...",
             expandedContent = "Ricerca dati in tempo reale in corso...",
             progress = 0,
-            chipText = "TRENO",
+            chipText = "OK",
             isInitial = true
         )
 
@@ -213,7 +217,7 @@ class TrainTrackerForegroundService : Service() {
 
         val nextStopTimestamp = nextStop?.actualOrEstimatedTimeMs ?: 0L
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        if (nativeMediaSession != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             try {
                 val metadata = MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, title)
@@ -304,7 +308,7 @@ class TrainTrackerForegroundService : Service() {
                     ).build()
                 )
 
-            // Collega la MediaSession nativa senza pulsanti di riproduzione per promuovere la notifica nella barra di stato Samsung One UI
+            // Se l'opzione MediaSession Bypass è stata attivata dalle Opzioni Sviluppatore
             nativeMediaSession?.sessionToken?.let { token ->
                 val mediaStyle = Notification.MediaStyle().setMediaSession(token)
                 builder.setStyle(mediaStyle)
@@ -316,7 +320,15 @@ class TrainTrackerForegroundService : Service() {
                 builder.setOnlyAlertOnce(true)
             }
 
-            if (whenTimestamp > 0) {
+            // Orario prossima fermata e cronometro come da specifiche ufficiali Google Live Updates
+            if (whenTimestamp > System.currentTimeMillis()) {
+                builder.setWhen(whenTimestamp)
+                builder.setShowWhen(true)
+                builder.setUsesChronometer(true)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    builder.setChronometerCountDown(true)
+                }
+            } else if (whenTimestamp > 0) {
                 builder.setWhen(whenTimestamp)
                 builder.setShowWhen(true)
             }
@@ -351,6 +363,22 @@ class TrainTrackerForegroundService : Service() {
                 }
             }
 
+            if (Build.VERSION.SDK_INT >= 36) {
+                try {
+                    val progressStyleClass = Class.forName("android.app.Notification\$ProgressStyle")
+                    val progressStyle = progressStyleClass.getDeclaredConstructor().newInstance()
+                    val setProgressMethod = progressStyleClass.getMethod("setProgress", Int::class.javaPrimitiveType)
+                    setProgressMethod.invoke(progressStyle, progress)
+
+                    val setStyleMethod = builder.javaClass.getMethod("setStyle", Class.forName("android.app.Notification\$Style"))
+                    setStyleMethod.invoke(builder, progressStyle)
+                } catch (e: Throwable) {
+                    builder.setStyle(Notification.BigTextStyle().bigText(expandedContent))
+                }
+            } else {
+                builder.setStyle(Notification.BigTextStyle().bigText(expandedContent))
+            }
+
             val notif = builder.build()
             notif.extras.putBoolean("android.requestPromotedOngoing", true)
             notif.extras.putBoolean("android.promotedOngoing", true)
@@ -382,6 +410,9 @@ class TrainTrackerForegroundService : Service() {
             if (whenTimestamp > 0) {
                 builder.setWhen(whenTimestamp)
                 builder.setShowWhen(true)
+                if (whenTimestamp > System.currentTimeMillis()) {
+                    builder.setUsesChronometer(true)
+                }
             }
 
             builder.build()

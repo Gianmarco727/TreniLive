@@ -10,6 +10,14 @@ class LiveTrainManager(context: Context) {
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    fun isMediaSessionBypassEnabled(): Boolean {
+        return prefs.getBoolean(KEY_MEDIA_SESSION_BYPASS, false)
+    }
+
+    fun setMediaSessionBypassEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_MEDIA_SESSION_BYPASS, enabled).commit()
+    }
+
     fun getLiveTrains(): List<LiveTrainConfig> {
         val jsonString = prefs.getString(KEY_LIVE_TRAINS, "[]") ?: "[]"
         val list = mutableListOf<LiveTrainConfig>()
@@ -106,5 +114,6 @@ class LiveTrainManager(context: Context) {
     companion object {
         private const val PREFS_NAME = "live_train_tracker_prefs"
         private const val KEY_LIVE_TRAINS = "saved_live_trains"
+        private const val KEY_MEDIA_SESSION_BYPASS = "key_media_session_bypass"
     }
 }

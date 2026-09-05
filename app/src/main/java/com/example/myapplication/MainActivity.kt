@@ -664,6 +664,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
 
     var liveTrains by remember { mutableStateOf(liveManager.getLiveTrains()) }
     val favoriteTrains by remember { mutableStateOf(favoritesManager.getFavoriteTrains()) }
+    var isMediaSessionBypass by remember { mutableStateOf(liveManager.isMediaSessionBypassEnabled()) }
 
     var inputTrainNumber by remember { mutableStateOf("") }
     var selectedDays by remember {
@@ -1118,6 +1119,59 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // SEZIONE OPZIONI SVILUPPATORE / DEBUG
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            )
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "🛠️ OPZIONI SVILUPPATORE (DEBUG)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    ) {
+                        Text(
+                            text = "Forza Capsula One UI (MediaSession Bypass)",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Bypassa la Whitelist OEM Samsung per forzare l'ancoraggio della capsula nella barra di stato.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Switch(
+                        checked = isMediaSessionBypass,
+                        onCheckedChange = { checked ->
+                            isMediaSessionBypass = checked
+                            liveManager.setMediaSessionBypassEnabled(checked)
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1402,4 +1456,4 @@ fun formatTime(timestampMs: Long?): String {
     if (timestampMs == null || timestampMs <= 0) return "--:--"
     val sdf = SimpleDateFormat("HH:mm", Locale.ITALY)
     return sdf.format(Date(timestampMs))
-}
+}`
