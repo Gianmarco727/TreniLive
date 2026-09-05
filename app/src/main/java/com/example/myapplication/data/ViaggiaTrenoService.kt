@@ -136,7 +136,7 @@ object ViaggiaTrenoService {
             val originStationName = json.optString("origine", "Partenza")
             val destinationStationName = json.optString("destinazione", "Arrivo")
 
-            val stops = mutableListOf<TrainStop>()
+            val rawStops = mutableListOf<TrainStop>()
             val fermateArray = json.optJSONArray("fermate")
 
             if (fermateArray != null) {
@@ -164,7 +164,7 @@ object ViaggiaTrenoService {
                     val (scheduledPlatform, actualPlatform) = extractPlatform(stopObj)
                     val stopCancelled = stopObj.optBoolean("fermataSoppressa", false)
 
-                    stops.add(
+                    rawStops.add(
                         TrainStop(
                             stationName = name,
                             stationId = id,
@@ -178,6 +178,16 @@ object ViaggiaTrenoService {
                         )
                     )
                 }
+            }
+
+            // Normalizzazione stato fermate: se una stazione successiva risulta superata, tutte quelle precedenti sono superate!
+            val lastPassedIdx = rawStops.indexOfLast { it.isPassed }
+            val stops = if (lastPassedIdx >= 0) {
+                rawStops.mapIndexed { idx, stop ->
+                    if (idx <= lastPassedIdx) stop.copy(isPassed = true) else stop
+                }
+            } else {
+                rawStops
             }
 
             val totalStops = stops.size

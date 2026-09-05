@@ -66,7 +66,8 @@ class TrainTrackerForegroundService : Service() {
 
         val initialNotification = buildNotification(
             title = "Tracciamento Treno $trainNumber",
-            content = "Ricerca dati in tempo reale in corso...",
+            shortContent = "Ricerca dati in tempo reale in corso...",
+            expandedContent = "Ricerca dati in tempo reale in corso...",
             progress = 0
         )
 
@@ -133,7 +134,8 @@ class TrainTrackerForegroundService : Service() {
     private fun updateNotificationError(message: String) {
         val notification = buildNotification(
             title = "Treno ${activeTrainNumber ?: ""}",
-            content = "Errore aggiornamento: $message",
+            shortContent = "Errore aggiornamento: $message",
+            expandedContent = "Errore aggiornamento: $message",
             progress = 0
         )
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -150,30 +152,37 @@ class TrainTrackerForegroundService : Service() {
 
         val title = "${status.category} ${status.trainNumber} $delayText"
 
+        val lastStationText = "Ultimo ril.: ${status.lastDetectedStation}"
+
         val nextStop = status.nextStop
-        val content = if (status.isCancelled) {
+        val nextStopText = if (status.isCancelled) {
             "Treno soppresso"
         } else if (status.progressPercentage >= 100) {
             "Treno giunto a destinazione (${status.destinationStationName})"
         } else if (nextStop != null) {
             val nextPlat = (nextStop.actualPlatform ?: nextStop.scheduledPlatform)?.takeIf { !it.equals("null", ignoreCase = true) && it.isNotBlank() }
             val timeStr = formatTime(nextStop.actualOrEstimatedTimeMs)
-            val platStr = if (!nextPlat.isNullOrBlank()) " • Bin. $nextPlat" else ""
+            val platStr = if (!nextPlat.isNullOrBlank()) " (Bin. $nextPlat)" else ""
             "Prossima: ${nextStop.stationName} ($timeStr)$platStr"
         } else {
-            "Ultimo rilevamento: ${status.lastDetectedStation}"
+            "Destinazione: ${status.destinationStationName}"
         }
+
+        val shortContent = "$lastStationText • $nextStopText"
+        val expandedContent = "$lastStationText\n$nextStopText"
 
         return buildNotification(
             title = title,
-            content = content,
+            shortContent = shortContent,
+            expandedContent = expandedContent,
             progress = status.progressPercentage
         )
     }
 
     private fun buildNotification(
         title: String,
-        content: String,
+        shortContent: String,
+        expandedContent: String,
         progress: Int
     ): Notification {
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
@@ -199,7 +208,8 @@ class TrainTrackerForegroundService : Service() {
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
-            .setContentText(content)
+            .setContentText(shortContent)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(expandedContent))
             .setContentIntent(openAppPendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

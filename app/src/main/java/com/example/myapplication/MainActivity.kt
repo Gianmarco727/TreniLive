@@ -656,7 +656,10 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
 fun LiveTrackerScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val liveManager = remember { LiveTrainManager(context) }
+    val favoritesManager = remember { FavoritesManager(context) }
+
     var liveTrains by remember { mutableStateOf(liveManager.getLiveTrains()) }
+    val favoriteTrains by remember { mutableStateOf(favoritesManager.getFavoriteTrains()) }
 
     var inputTrainNumber by remember { mutableStateOf("") }
     var selectedDays by remember {
@@ -710,8 +713,8 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
         Calendar.SUNDAY to "DOM"
     )
 
-    val addTrainToLiveTracker = {
-        val cleanNum = inputTrainNumber.trim()
+    val addTrainNumberToLiveTracker = { targetNumber: String ->
+        val cleanNum = targetNumber.trim()
         if (cleanNum.isBlank()) {
             addError = "Inserisci un numero di treno valido."
         } else if (selectedDays.isEmpty()) {
@@ -796,6 +799,49 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                     Button(onClick = { permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }) {
                         Text("Abilita")
                     }
+                }
+            }
+        }
+
+        // AGGIUNTA RAPIDA DAI PREFERITI ❤️
+        if (favoriteTrains.isNotEmpty()) {
+            Text(
+                text = "AGGIUNGI RAPIDO DAI MIEI PREFERITI ❤️",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 0.5.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                favoriteTrains.forEach { favNum ->
+                    val isAlreadyAdded = liveTrains.any { it.trainNumber == favNum }
+                    SuggestionChip(
+                        onClick = {
+                            if (!isAlreadyAdded) {
+                                inputTrainNumber = favNum
+                                addTrainNumberToLiveTracker(favNum)
+                            }
+                        },
+                        enabled = !isAdding && !isAlreadyAdded,
+                        label = {
+                            Text(
+                                text = if (isAlreadyAdded) "✓ Treno $favNum" else "➕ ❤️ Treno $favNum",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        },
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = if (isAlreadyAdded) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primaryContainer
+                        )
+                    )
                 }
             }
         }
@@ -896,7 +942,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Button(
-                    onClick = { addTrainToLiveTracker() },
+                    onClick = { addTrainNumberToLiveTracker(inputTrainNumber) },
                     enabled = !isAdding,
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E)),
