@@ -160,7 +160,6 @@ class TrainTrackerForegroundService : Service() {
             else -> "• In orario"
         }
 
-        // Testo specifico per il chip della barra di stato: OK, +5, -4, SOPPR
         val chipText = when {
             status.isCancelled -> "SOPPR"
             status.delayMinutes > 0 -> "+${status.delayMinutes}"
@@ -272,7 +271,15 @@ class TrainTrackerForegroundService : Service() {
                 builder.setOnlyAlertOnce(true)
             }
 
-            if (whenTimestamp > 0) {
+            // Imposta l'orario della prossima fermata ed attiva il cronometro countdown come da specifiche ufficiali Google Live Updates
+            if (whenTimestamp > System.currentTimeMillis()) {
+                builder.setWhen(whenTimestamp)
+                builder.setShowWhen(true)
+                builder.setUsesChronometer(true)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    builder.setChronometerCountDown(true)
+                }
+            } else if (whenTimestamp > 0) {
                 builder.setWhen(whenTimestamp)
                 builder.setShowWhen(true)
             }
@@ -354,6 +361,9 @@ class TrainTrackerForegroundService : Service() {
             if (whenTimestamp > 0) {
                 builder.setWhen(whenTimestamp)
                 builder.setShowWhen(true)
+                if (whenTimestamp > System.currentTimeMillis()) {
+                    builder.setUsesChronometer(true)
+                }
             }
 
             builder.build()
