@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.example.myapplication.MainActivity
@@ -68,7 +69,8 @@ class TrainTrackerForegroundService : Service() {
             title = "Tracciamento Treno $trainNumber",
             shortContent = "Ricerca dati in tempo reale in corso...",
             expandedContent = "Ricerca dati in tempo reale in corso...",
-            progress = 0
+            progress = 0,
+            chipText = "LIVETRAIN"
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -136,7 +138,8 @@ class TrainTrackerForegroundService : Service() {
             title = "Treno ${activeTrainNumber ?: ""}",
             shortContent = "Errore aggiornamento: $message",
             expandedContent = "Errore aggiornamento: $message",
-            progress = 0
+            progress = 0,
+            chipText = "ERR"
         )
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notifySafely(notificationManager, NOTIFICATION_ID, notification)
@@ -148,6 +151,13 @@ class TrainTrackerForegroundService : Service() {
             status.delayMinutes > 0 -> "• +${status.delayMinutes} min"
             status.delayMinutes < 0 -> "• ${status.delayMinutes} min"
             else -> "• In orario"
+        }
+
+        val chipText = when {
+            status.isCancelled -> "SOPPR."
+            status.delayMinutes > 0 -> "+${status.delayMinutes}m"
+            status.delayMinutes < 0 -> "${status.delayMinutes}m"
+            else -> "OK"
         }
 
         val title = "${status.category} ${status.trainNumber} $delayText"
@@ -171,11 +181,15 @@ class TrainTrackerForegroundService : Service() {
         val shortContent = "$lastStationText • $nextStopText"
         val expandedContent = "$lastStationText\n$nextStopText"
 
+        val nextStopTimestamp = nextStop?.actualOrEstimatedTimeMs ?: 0L
+
         return buildNotification(
             title = title,
             shortContent = shortContent,
             expandedContent = expandedContent,
-            progress = status.progressPercentage
+            progress = status.progressPercentage,
+            chipText = chipText,
+            whenTimestamp = nextStopTimestamp
         )
     }
 
@@ -183,7 +197,9 @@ class TrainTrackerForegroundService : Service() {
         title: String,
         shortContent: String,
         expandedContent: String,
-        progress: Int
+        progress: Int,
+        chipText: String = "",
+        whenTimestamp: Long = 0L
     ): Notification {
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -205,19 +221,30 @@ class TrainTrackerForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val extras = Bundle().apply {
+            // Requisiti ufficiali Android 15/16/17 e Samsung One UI per la pillola/capsula nella barra di stato
+            putBoolean("android.requestPromotedOngoing", true)
+            if (chipText.isNotBlank()) {
+                putString("android.shortCriticalText", chipText)
+            }
+        }
+
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(shortContent)
             .setStyle(NotificationCompat.BigTextStyle().bigText(expandedContent))
-            .setContentIntent(openAppPendingIntent)
+            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setProgress(100, progress, false)
+            .addExtras(extras)
+            .setContentIntent(openAppPendingIntent)
             .addAction(R.mipmap.ic_launcher, "Interrompi", stopPendingIntent)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            builder.setCategory(NotificationCompat.CATEGORY_STATUS)
+        if (whenTimestamp > 0) {
+            builder.setWhen(whenTimestamp)
+            builder.setShowWhen(true)
         }
 
         return builder.build()
