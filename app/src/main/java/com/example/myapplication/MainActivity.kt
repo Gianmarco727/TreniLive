@@ -1,10 +1,15 @@
 package com.example.myapplication
 
+import android.Manifest
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -30,7 +35,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.example.myapplication.data.*
+import com.example.myapplication.service.TrainTrackerForegroundService
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -43,9 +50,34 @@ class MainActivity : ComponentActivity() {
         setContent {
             MyApplicationTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    TrainTrackerScreen(modifier = Modifier.padding(innerPadding))
+                    MainTabScreen(modifier = Modifier.padding(innerPadding))
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun MainTabScreen(modifier: Modifier = Modifier) {
+    var selectedTab by remember { mutableIntStateOf(0) }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        PrimaryTabRow(selectedTabIndex = selectedTab) {
+            Tab(
+                selected = selectedTab == 0,
+                onClick = { selectedTab = 0 },
+                text = { Text("🔍 Cerca Treni", fontWeight = FontWeight.Bold, fontSize = 14.sp) }
+            )
+            Tab(
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                text = { Text("⚡ Live Tracker", fontWeight = FontWeight.Bold, fontSize = 14.sp) }
+            )
+        }
+
+        when (selectedTab) {
+            0 -> TrainTrackerScreen()
+            1 -> LiveTrackerScreen()
         }
     }
 }
@@ -109,7 +141,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    // Funzione ricerca dettagli per una specifica partenza trovata nella lista (gestisce correttamente i treni di domani)
+    // Funzione ricerca dettagli per una specifica partenza trovata nella lista
     val searchByDeparture = { dep: StationDeparture ->
         focusManager.clearFocus()
         errorMessage = null
@@ -351,7 +383,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                     onValueChange = { query ->
                         originQuery = query
                         selectedOriginStation = null
-                        trainNumberInput = "" // Svuota il numero treno per evitare conflitti
+                        trainNumberInput = ""
                         if (query.length >= 2) {
                             coroutineScope.launch {
                                 when (val res = ViaggiaTrenoService.autocompleteStation(query)) {
@@ -406,7 +438,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                     onValueChange = { query ->
                         destinationQuery = query
                         selectedDestinationStation = null
-                        trainNumberInput = "" // Svuota il numero treno per evitare conflitti
+                        trainNumberInput = ""
                         if (query.length >= 2) {
                             coroutineScope.launch {
                                 when (val res = ViaggiaTrenoService.autocompleteStation(query)) {
@@ -612,6 +644,365 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LiveTrackerScreen(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val liveManager = remember { LiveTrainManager(context) }
+    var liveTrains by remember { mutableStateOf(liveManager.getLiveTrains()) }
+
+    var inputTrainNumber by remember { mutableStateOf("") }
+    var selectedDays by remember {
+        mutableStateOf(
+            setOf(
+                Calendar.MONDAY,
+                Calendar.TUESDAY,
+                Calendar.WEDNESDAY,
+                Calendar.THURSDAY,
+                Calendar.FRIDAY
+            )
+        )
+    }
+
+    var isAdding by remember { mutableStateOf(false) }
+    var addError by remember { mutableStateOf<String?>(null) }
+
+    val coroutineScope = rememberCoroutineScope()
+
+    // Gestione Permesso Notifiche Android 13+
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+            } else true
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasNotificationPermission = isGranted
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    val dayOptions = listOf(
+        Calendar.MONDAY to "LUN",
+        Calendar.TUESDAY to "MAR",
+        Calendar.WEDNESDAY to "MER",
+        Calendar.THURSDAY to "GIO",
+        Calendar.FRIDAY to "VEN",
+        Calendar.SATURDAY to "SAB",
+        Calendar.SUNDAY to "DOM"
+    )
+
+    val addTrainToLiveTracker = {
+        val cleanNum = inputTrainNumber.trim()
+        if (cleanNum.isBlank()) {
+            addError = "Inserisci un numero di treno valido."
+        } else if (selectedDays.isEmpty()) {
+            addError = "Seleziona almeno un giorno della settimana."
+        } else {
+            addError = null
+            isAdding = true
+
+            coroutineScope.launch {
+                when (val resolveRes = ViaggiaTrenoService.resolveTrain(cleanNum)) {
+                    is ViaggiaTrenoResult.Success -> {
+                        val (num, stationId, timestamp) = resolveRes.data
+                        when (val statusRes = ViaggiaTrenoService.fetchTrainStatus(num, stationId, timestamp)) {
+                            is ViaggiaTrenoResult.Success -> {
+                                val status = statusRes.data
+                                val newConfig = LiveTrainConfig(
+                                    id = UUID.randomUUID().toString(),
+                                    trainNumber = num,
+                                    daysOfWeek = selectedDays,
+                                    originStationId = stationId,
+                                    originStationName = status.originStationName,
+                                    destinationStationName = status.destinationStationName,
+                                    scheduledDepartureTime = "",
+                                    isEnabled = true
+                                )
+                                liveTrains = liveManager.saveLiveTrain(newConfig)
+                                inputTrainNumber = ""
+                                addError = null
+                            }
+                            is ViaggiaTrenoResult.Error -> {
+                                addError = statusRes.message
+                            }
+                        }
+                    }
+                    is ViaggiaTrenoResult.Error -> {
+                        addError = resolveRes.message
+                    }
+                }
+                isAdding = false
+            }
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp)
+    ) {
+        Text(
+            text = "Live Tracker Pendolari",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Text(
+            text = "I treni salvati qui attivano automaticamente la notifica Live Ongoing nei giorni programmati.",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+        )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Attiva i permessi per la notifica Live Activity / Capsule nella barra di stato.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(onClick = { permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }) {
+                        Text("Abilita")
+                    }
+                }
+            }
+        }
+
+        // CARD PER AGGIUNGERE UN TRENO AL LIVE TRACKER
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            )
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "PROGRAMMA UN NUOVO TRENO",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = inputTrainNumber,
+                    onValueChange = { inputTrainNumber = it },
+                    placeholder = { Text("Numero Treno (es. 16758, 9410)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "GIORNI DI TRACCIAMENTO AUTOMATICO:",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Pulsanti Selettori Giorni Settimana
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    dayOptions.forEach { (calDay, label) ->
+                        val isSelected = selectedDays.contains(calDay)
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                selectedDays = if (isSelected) {
+                                    selectedDays - calDay
+                                } else {
+                                    selectedDays + calDay
+                                }
+                            },
+                            label = { Text(label, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TextButton(onClick = {
+                        selectedDays = setOf(
+                            Calendar.MONDAY, Calendar.TUESDAY, Calendar.WEDNESDAY,
+                            Calendar.THURSDAY, Calendar.FRIDAY
+                        )
+                    }) {
+                        Text("Lun-Ven", fontSize = 12.sp)
+                    }
+                    TextButton(onClick = {
+                        selectedDays = setOf(
+                            Calendar.SUNDAY, Calendar.MONDAY, Calendar.TUESDAY,
+                            Calendar.WEDNESDAY, Calendar.THURSDAY, Calendar.FRIDAY, Calendar.SATURDAY
+                        )
+                    }) {
+                        Text("Tutti i giorni", fontSize = 12.sp)
+                    }
+                }
+
+                addError?.let { err ->
+                    Text(
+                        text = err,
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = { addTrainToLiveTracker() },
+                    enabled = !isAdding,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    if (isAdding) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Aggiungi a Live Tracker", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "TRENI PROGRAMMATI (${liveTrains.size})",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        if (liveTrains.isEmpty()) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Nessun treno salvato nel Live Tracker. Aggiungi il numero del tuo treno pendolare sopra per attivare le notifiche automatiche nei giorni selezionati.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+        } else {
+            liveTrains.forEach { config ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Treno ${config.trainNumber}",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${config.originStationName} ➔ ${config.destinationStationName}",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "📅 ${config.getDaysFormatted()}",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+
+                            Switch(
+                                checked = config.isEnabled,
+                                onCheckedChange = {
+                                    liveTrains = liveManager.toggleTrainEnabled(config.id)
+                                }
+                            )
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = {
+                                    TrainTrackerForegroundService.startService(
+                                        context = context,
+                                        trainNumber = config.trainNumber,
+                                        stationId = config.originStationId
+                                    )
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("▶ Avvia Notifica Ora", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            TextButton(onClick = {
+                                liveTrains = liveManager.removeLiveTrain(config.id)
+                            }) {
+                                Text("🗑️ Rimuovi", color = Color(0xFFD32F2F), fontSize = 12.sp)
+                            }
                         }
                     }
                 }
