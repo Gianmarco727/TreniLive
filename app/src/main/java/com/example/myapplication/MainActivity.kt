@@ -731,6 +731,8 @@ fun TrainStatusCard(
 
             // Prossima Fermata
             status.nextStop?.let { next ->
+                val nextPlat = (next.actualPlatform ?: next.scheduledPlatform)?.takeIf { !it.equals("null", ignoreCase = true) && it.isNotBlank() }
+
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
                     shape = RoundedCornerShape(12.dp),
@@ -754,7 +756,7 @@ fun TrainStatusCard(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
-                            next.actualPlatform?.let { platform ->
+                            nextPlat?.let { platform ->
                                 Text(
                                     text = "Binario: $platform",
                                     fontSize = 12.sp,
@@ -818,8 +820,11 @@ fun TrainStatusCard(
                     val boardingStop = status.stops.getOrNull(boardingIdx)
                     val alightingStop = status.stops.getOrNull(alightingIdx)
 
-                    val boardingPlatform = boardingStop?.actualPlatform ?: boardingStop?.scheduledPlatform
-                    val alightingPlatform = alightingStop?.actualPlatform ?: alightingStop?.scheduledPlatform
+                    val rawBoardingPlat = boardingStop?.actualPlatform ?: boardingStop?.scheduledPlatform
+                    val rawAlightingPlat = alightingStop?.actualPlatform ?: alightingStop?.scheduledPlatform
+
+                    val boardingPlatform = rawBoardingPlat?.takeIf { !it.equals("null", ignoreCase = true) && it.isNotBlank() }
+                    val alightingPlatform = rawAlightingPlat?.takeIf { !it.equals("null", ignoreCase = true) && it.isNotBlank() }
 
                     val startPct = (boardingIdx.toFloat() / (stopsCount - 1)) * 100
                     val endPct = (alightingIdx.toFloat() / (stopsCount - 1)) * 100

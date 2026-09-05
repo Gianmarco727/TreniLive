@@ -49,6 +49,28 @@ object ViaggiaTrenoService {
         }
 
     /**
+     * Estrae in modo sicuro il valore del binario evitando stringhe "null" o chiavi assenti.
+     */
+    private fun extractPlatform(stopObj: JSONObject): Pair<String?, String?> {
+        fun safeString(key: String): String? {
+            if (!stopObj.has(key) || stopObj.isNull(key)) return null
+            val str = stopObj.optString(key, "").trim()
+            if (str.isEmpty() || str.equals("null", ignoreCase = true)) return null
+            return str
+        }
+
+        val progPartenza = safeString("binarioProgrammatoPartenzaDescrizione")
+        val progArrivo = safeString("binarioProgrammatoArrivoDescrizione")
+        val effPartenza = safeString("binarioEffettivoPartenzaDescrizione")
+        val effArrivo = safeString("binarioEffettivoArrivoDescrizione")
+
+        val scheduled = progPartenza ?: progArrivo
+        val actual = effPartenza ?: effArrivo
+
+        return Pair(scheduled, actual)
+    }
+
+    /**
      * Recupera lo stato in tempo reale del treno data la stazione di partenza, il numero e il timestamp.
      * Endpoint: andamentoTreno/{ID_STAZIONE}/{NUMERO_TRENO}/{TIMESTAMP}
      */
@@ -109,12 +131,7 @@ object ViaggiaTrenoService {
 
                     val stopDelay = stopObj.optInt("ritardo", delayMinutes)
 
-                    val scheduledPlatform = stopObj.optString("binarioProgrammatoPartenzaDescrizione", "")
-                        .ifBlank { stopObj.optString("binarioProgrammatoArrivoDescrizione", "").ifBlank { null } }
-
-                    val actualPlatform = stopObj.optString("binarioEffettivoPartenzaDescrizione", "")
-                        .ifBlank { stopObj.optString("binarioEffettivoArrivoDescrizione", "").ifBlank { null } }
-
+                    val (scheduledPlatform, actualPlatform) = extractPlatform(stopObj)
                     val stopCancelled = stopObj.optBoolean("fermataSoppressa", false)
 
                     stops.add(
@@ -173,7 +190,6 @@ object ViaggiaTrenoService {
         departureStationId: String,
         departureTimestampMs: Long
     ): ViaggiaTrenoResult<TrainStatus> = withContext(Dispatchers.IO) {
-        // 1. Prova a scaricare lo stato in tempo reale per il timestamp specifico
         if (departureTimestampMs > 0) {
             val liveResult = fetchTrainStatus(trainNumber, departureStationId, departureTimestampMs.toString())
             if (liveResult is ViaggiaTrenoResult.Success) {
@@ -181,7 +197,6 @@ object ViaggiaTrenoService {
             }
         }
 
-        // 2. Se è un treno programmato per il futuro (andamentoTreno non ancora attivo su ViaggiaTreno):
         val resolveRes = resolveTrain(trainNumber)
         if (resolveRes is ViaggiaTrenoResult.Success) {
             val (num, depId, ts) = resolveRes.data
@@ -276,8 +291,8 @@ object ViaggiaTrenoService {
                     val delay = obj.optInt("ritardo", 0)
                     val originId = obj.optString("codOrigine", stationId)
                     val departureTimestampMs = obj.optLong("dataPartenzaTreno", 0L)
-                    val platform = obj.optString("binarioEffettivoPartenzaDescrizione", "")
-                        .ifBlank { obj.optString("binarioProgrammatoPartenzaDescrizione", "").ifBlank { null } }
+                    val (scheduledPlat, actualPlat) = extractPlatform(obj)
+                    val platform = actualPlat ?: scheduledPlat
 
                     if (num.isNotBlank()) {
                         departures.add(
