@@ -18,6 +18,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -118,11 +119,17 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
 
-    // Quando compaiono nuovi suggerimenti stazioni, effettua l'auto-scroll per mantenerli completamente visibili sopra la tastiera
+    var previousSuggestionsCount by remember { mutableIntStateOf(0) }
+
+    // Quando compaiono i suggerimenti, effettua un piccolo scroll controllato dell'altezza di 1 suggerimento (~140px)
     LaunchedEffect(originSuggestions, destinationSuggestions) {
-        if (originSuggestions.isNotEmpty() || destinationSuggestions.isNotEmpty()) {
-            scrollState.animateScrollTo(scrollState.maxValue)
+        val currentCount = originSuggestions.size + destinationSuggestions.size
+        if (currentCount > 0 && previousSuggestionsCount == 0) {
+            scrollState.animateScrollBy(140f)
+        } else if (currentCount == 0 && previousSuggestionsCount > 0) {
+            scrollState.animateScrollBy(-140f)
         }
+        previousSuggestionsCount = currentCount
     }
 
     // Funzione ricerca diretta per numero di treno
@@ -697,8 +704,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        // Spazio extra in fondo per assicurare ampio margine di scorrimento sopra la tastiera virtuale
-        Spacer(modifier = Modifier.height(200.dp))
+        Spacer(modifier = Modifier.height(40.dp))
     }
 }
 
