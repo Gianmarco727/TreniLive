@@ -373,354 +373,352 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        // CARD DI RICERCA UNIFICATA CON ANGOLI ARROTONDATI M3
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+        // SEZIONE RICERCA PULITA APERTA SENZA SCATOLA GRIGLIA ESTERNA
+        Column(modifier = Modifier.fillMaxWidth()) {
 
-                // Opzione 1: Ricerca per Numero Treno
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // Opzione 1: Ricerca per Numero Treno
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = CircleShape,
+                    modifier = Modifier.size(24.dp)
                 ) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = CircleShape,
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "1",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
-                    Text(
-                        text = "Ricerca Diretta per Numero Treno",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = trainNumberInput,
-                    onValueChange = { trainNumberInput = it },
-                    placeholder = { Text("Es. 9410, 16022, 16016") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Search
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onSearch = { searchByTrainNumber(trainNumberInput) }
-                    ),
-                    trailingIcon = {
-                        if (trainNumberInput.isNotBlank()) {
-                            IconButton(onClick = { trainNumberInput = "" }) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Cancella",
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
-                )
-
-                if (trainNumberInput.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = { searchByTrainNumber(trainNumberInput) },
-                        enabled = !isLoading,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E))
-                    ) {
-                        Text("Cerca Treno $trainNumberInput", fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-
-                // Opzione 2: Ricerca per Stazioni e Tratta
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = CircleShape,
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "2",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
-                    Text(
-                        text = "Oppure Cerca per Tratta Completa",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Stazione Partenza (con Autocomplete)
-                OutlinedTextField(
-                    value = originQuery,
-                    onValueChange = { tfv ->
-                        originQuery = tfv
-                        selectedOriginStation = null
-                        trainNumberInput = ""
-                        val query = tfv.text
-                        if (query.length >= 2) {
-                            coroutineScope.launch {
-                                when (val res = ViaggiaTrenoService.autocompleteStation(query)) {
-                                    is ViaggiaTrenoResult.Success -> {
-                                        originSuggestions = res.data
-                                    }
-                                    is ViaggiaTrenoResult.Error -> {}
-                                }
-                            }
-                        } else {
-                            originSuggestions = emptyList()
-                        }
-                    },
-                    placeholder = { Text("Stazione di Partenza") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    trailingIcon = {
-                        if (originQuery.text.isNotBlank()) {
-                            IconButton(onClick = {
-                                originQuery = TextFieldValue("")
-                                selectedOriginStation = null
-                                originSuggestions = emptyList()
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Cancella",
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    }
-                )
-
-                // Autocomplete Partenza
-                if (originSuggestions.isNotEmpty() && selectedOriginStation == null) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        shadowElevation = 4.dp
-                    ) {
-                        Column {
-                            originSuggestions.take(5).forEach { station ->
-                                Text(
-                                    text = station.name,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            selectedOriginStation = station
-                                            // Posiziona esplicitamente il cursore alla FINE del testo selezionato
-                                            originQuery = TextFieldValue(
-                                                text = station.name,
-                                                selection = TextRange(station.name.length)
-                                            )
-                                            originSuggestions = emptyList()
-                                        }
-                                        .padding(12.dp),
-                                    fontSize = 14.sp
-                                )
-                                HorizontalDivider()
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Stazione Arrivo (con Autocomplete)
-                OutlinedTextField(
-                    value = destinationQuery,
-                    onValueChange = { tfv ->
-                        destinationQuery = tfv
-                        selectedDestinationStation = null
-                        trainNumberInput = ""
-                        val query = tfv.text
-                        if (query.length >= 2) {
-                            coroutineScope.launch {
-                                when (val res = ViaggiaTrenoService.autocompleteStation(query)) {
-                                    is ViaggiaTrenoResult.Success -> {
-                                        destinationSuggestions = res.data
-                                    }
-                                    is ViaggiaTrenoResult.Error -> {}
-                                }
-                            }
-                        } else {
-                            destinationSuggestions = emptyList()
-                        }
-                    },
-                    placeholder = { Text("Stazione di Destinazione") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    trailingIcon = {
-                        if (destinationQuery.text.isNotBlank()) {
-                            IconButton(onClick = {
-                                destinationQuery = TextFieldValue("")
-                                selectedDestinationStation = null
-                                destinationSuggestions = emptyList()
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Cancella",
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    }
-                )
-
-                // Autocomplete Arrivo
-                if (destinationSuggestions.isNotEmpty() && selectedDestinationStation == null) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        shadowElevation = 4.dp
-                    ) {
-                        Column {
-                            destinationSuggestions.take(5).forEach { station ->
-                                Text(
-                                    text = station.name,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            selectedDestinationStation = station
-                                            // Posiziona esplicitamente il cursore alla FINE del testo selezionato
-                                            destinationQuery = TextFieldValue(
-                                                text = station.name,
-                                                selection = TextRange(station.name.length)
-                                            )
-                                            destinationSuggestions = emptyList()
-                                        }
-                                        .padding(12.dp),
-                                    fontSize = 14.sp
-                                )
-                                HorizontalDivider()
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Selezione Data & Ora
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = showDatePicker,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.CalendarToday,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = SimpleDateFormat("dd/MM/yyyy", Locale.ITALY).format(Date(selectedDateMs)),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    OutlinedButton(
-                        onClick = showTimePicker,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Schedule,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = SimpleDateFormat("HH:mm", Locale.ITALY).format(Date(selectedDateMs)),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                errorMessage?.let { error ->
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    Box(contentAlignment = Alignment.Center) {
                         Text(
-                            text = error,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(10.dp)
+                            text = "1",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                 }
+                Text(
+                    text = "Ricerca Diretta per Numero Treno",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
 
-                Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-                // Pulsante di Ricerca Soluzioni Tratta
+            OutlinedTextField(
+                value = trainNumberInput,
+                onValueChange = { trainNumberInput = it },
+                placeholder = { Text("Es. 9410, 16022, 16016") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Search
+                ),
+                keyboardActions = KeyboardActions(
+                    onSearch = { searchByTrainNumber(trainNumberInput) }
+                ),
+                trailingIcon = {
+                    if (trainNumberInput.isNotBlank()) {
+                        IconButton(onClick = { trainNumberInput = "" }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Cancella",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            )
+
+            if (trainNumberInput.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
                 Button(
-                    onClick = { searchByStations() },
+                    onClick = { searchByTrainNumber(trainNumberInput) },
                     enabled = !isLoading,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E))
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFC8102E),
+                        contentColor = Color.White
+                    )
                 ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
-                    } else {
+                    Text("Cerca Treno $trainNumberInput", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 18.dp))
+
+            // Opzione 2: Ricerca per Stazioni e Tratta
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = CircleShape,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
                         Text(
-                            text = "Cerca Soluzioni Tratta",
-                            fontSize = 16.sp,
+                            text = "2",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+                Text(
+                    text = "Oppure Cerca per Tratta Completa",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Stazione Partenza (con Autocomplete)
+            OutlinedTextField(
+                value = originQuery,
+                onValueChange = { tfv ->
+                    originQuery = tfv
+                    selectedOriginStation = null
+                    trainNumberInput = ""
+                    val query = tfv.text
+                    if (query.length >= 2) {
+                        coroutineScope.launch {
+                            when (val res = ViaggiaTrenoService.autocompleteStation(query)) {
+                                is ViaggiaTrenoResult.Success -> {
+                                    originSuggestions = res.data
+                                }
+                                is ViaggiaTrenoResult.Error -> {}
+                            }
+                        }
+                    } else {
+                        originSuggestions = emptyList()
+                    }
+                },
+                placeholder = { Text("Stazione di Partenza") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                trailingIcon = {
+                    if (originQuery.text.isNotBlank()) {
+                        IconButton(onClick = {
+                            originQuery = TextFieldValue("")
+                            selectedOriginStation = null
+                            originSuggestions = emptyList()
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Cancella",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            )
+
+            // Autocomplete Partenza
+            if (originSuggestions.isNotEmpty() && selectedOriginStation == null) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    shadowElevation = 4.dp
+                ) {
+                    Column {
+                        originSuggestions.take(5).forEach { station ->
+                            Text(
+                                text = station.name,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedOriginStation = station
+                                        // Posiziona esplicitamente il cursore alla FINE del testo selezionato
+                                        originQuery = TextFieldValue(
+                                            text = station.name,
+                                            selection = TextRange(station.name.length)
+                                        )
+                                        originSuggestions = emptyList()
+                                    }
+                                    .padding(12.dp),
+                                fontSize = 14.sp
+                            )
+                            HorizontalDivider()
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Stazione Arrivo (con Autocomplete)
+            OutlinedTextField(
+                value = destinationQuery,
+                onValueChange = { tfv ->
+                    destinationQuery = tfv
+                    selectedDestinationStation = null
+                    trainNumberInput = ""
+                    val query = tfv.text
+                    if (query.length >= 2) {
+                        coroutineScope.launch {
+                            when (val res = ViaggiaTrenoService.autocompleteStation(query)) {
+                                is ViaggiaTrenoResult.Success -> {
+                                    destinationSuggestions = res.data
+                                }
+                                is ViaggiaTrenoResult.Error -> {}
+                            }
+                        }
+                    } else {
+                        destinationSuggestions = emptyList()
+                    }
+                },
+                placeholder = { Text("Stazione di Destinazione") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                trailingIcon = {
+                    if (destinationQuery.text.isNotBlank()) {
+                        IconButton(onClick = {
+                            destinationQuery = TextFieldValue("")
+                            selectedDestinationStation = null
+                            destinationSuggestions = emptyList()
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Cancella",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            )
+
+            // Autocomplete Arrivo
+            if (destinationSuggestions.isNotEmpty() && selectedDestinationStation == null) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    shadowElevation = 4.dp
+                ) {
+                    Column {
+                        destinationSuggestions.take(5).forEach { station ->
+                            Text(
+                                text = station.name,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedDestinationStation = station
+                                        // Posiziona esplicitamente il cursore alla FINE del testo selezionato
+                                        destinationQuery = TextFieldValue(
+                                            text = station.name,
+                                            selection = TextRange(station.name.length)
+                                        )
+                                        destinationSuggestions = emptyList()
+                                    }
+                                    .padding(12.dp),
+                                fontSize = 14.sp
+                            )
+                            HorizontalDivider()
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Selezione Data & Ora
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = showDatePicker,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.CalendarToday,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = SimpleDateFormat("dd/MM/yyyy", Locale.ITALY).format(Date(selectedDateMs)),
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
+                }
+
+                OutlinedButton(
+                    onClick = showTimePicker,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Schedule,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = SimpleDateFormat("HH:mm", Locale.ITALY).format(Date(selectedDateMs)),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            errorMessage?.let { error ->
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Pulsante di Ricerca Soluzioni Tratta
+            Button(
+                onClick = { searchByStations() },
+                enabled = !isLoading,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFC8102E),
+                    contentColor = Color.White
+                )
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+                } else {
+                    Text(
+                        text = "Cerca Soluzioni Tratta",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
                 }
             }
         }
