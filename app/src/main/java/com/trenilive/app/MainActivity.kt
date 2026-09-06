@@ -32,9 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -94,12 +96,12 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
 
     var trainNumberInput by remember { mutableStateOf("") }
 
-    // Campi stazioni per la ricerca
-    var originQuery by remember { mutableStateOf("") }
+    // Campi stazioni per la ricerca gestiti con TextFieldValue per controllo del cursore
+    var originQuery by remember { mutableStateOf(TextFieldValue("")) }
     var selectedOriginStation by remember { mutableStateOf<StationInfo?>(null) }
     var originSuggestions by remember { mutableStateOf<List<StationInfo>>(emptyList()) }
 
-    var destinationQuery by remember { mutableStateOf("") }
+    var destinationQuery by remember { mutableStateOf(TextFieldValue("")) }
     var selectedDestinationStation by remember { mutableStateOf<StationInfo?>(null) }
     var destinationSuggestions by remember { mutableStateOf<List<StationInfo>>(emptyList()) }
 
@@ -171,8 +173,8 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
     // Funzione ricerca soluzioni per stazione e orario
     val searchByStations = {
         focusManager.clearFocus()
-        val originName = originQuery.trim()
-        val destName = destinationQuery.trim()
+        val originName = originQuery.text.trim()
+        val destName = destinationQuery.text.trim()
 
         if (originName.isEmpty()) {
             errorMessage = "La Stazione di Partenza è obbligatoria."
@@ -262,6 +264,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
         horizontalAlignment = Alignment.Start
@@ -384,10 +387,11 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                 // Stazione Partenza (con Autocomplete)
                 OutlinedTextField(
                     value = originQuery,
-                    onValueChange = { query ->
-                        originQuery = query
+                    onValueChange = { tfv ->
+                        originQuery = tfv
                         selectedOriginStation = null
                         trainNumberInput = ""
+                        val query = tfv.text
                         if (query.length >= 2) {
                             coroutineScope.launch {
                                 when (val res = ViaggiaTrenoService.autocompleteStation(query)) {
@@ -401,10 +405,21 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                             originSuggestions = emptyList()
                         }
                     },
-                    placeholder = { Text("Stazione Partenza (es. Conegliano)") },
+                    placeholder = { Text("Stazione di Partenza") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    trailingIcon = {
+                        if (originQuery.text.isNotBlank()) {
+                            IconButton(onClick = {
+                                originQuery = TextFieldValue("")
+                                selectedOriginStation = null
+                                originSuggestions = emptyList()
+                            }) {
+                                Text("✖", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 )
 
                 // Autocomplete Partenza
@@ -422,7 +437,11 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                                         .fillMaxWidth()
                                         .clickable {
                                             selectedOriginStation = station
-                                            originQuery = station.name
+                                            // Posiziona esplicitamente il cursore alla FINE del testo selezionato
+                                            originQuery = TextFieldValue(
+                                                text = station.name,
+                                                selection = TextRange(station.name.length)
+                                            )
                                             originSuggestions = emptyList()
                                         }
                                         .padding(12.dp),
@@ -439,10 +458,11 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                 // Stazione Arrivo (con Autocomplete)
                 OutlinedTextField(
                     value = destinationQuery,
-                    onValueChange = { query ->
-                        destinationQuery = query
+                    onValueChange = { tfv ->
+                        destinationQuery = tfv
                         selectedDestinationStation = null
                         trainNumberInput = ""
+                        val query = tfv.text
                         if (query.length >= 2) {
                             coroutineScope.launch {
                                 when (val res = ViaggiaTrenoService.autocompleteStation(query)) {
@@ -456,10 +476,21 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                             destinationSuggestions = emptyList()
                         }
                     },
-                    placeholder = { Text("Stazione Arrivo (es. Pordenone)") },
+                    placeholder = { Text("Stazione di Destinazione") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    trailingIcon = {
+                        if (destinationQuery.text.isNotBlank()) {
+                            IconButton(onClick = {
+                                destinationQuery = TextFieldValue("")
+                                selectedDestinationStation = null
+                                destinationSuggestions = emptyList()
+                            }) {
+                                Text("✖", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 )
 
                 // Autocomplete Arrivo
@@ -477,7 +508,11 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                                         .fillMaxWidth()
                                         .clickable {
                                             selectedDestinationStation = station
-                                            destinationQuery = station.name
+                                            // Posiziona esplicitamente il cursore alla FINE del testo selezionato
+                                            destinationQuery = TextFieldValue(
+                                                text = station.name,
+                                                selection = TextRange(station.name.length)
+                                            )
                                             destinationSuggestions = emptyList()
                                         }
                                         .padding(12.dp),
@@ -580,8 +615,8 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                     onCloseDetail = {
                         trainStatus = null
                     },
-                    userBoardingStation = originQuery,
-                    userAlightingStation = destinationQuery
+                    userBoardingStation = originQuery.text,
+                    userAlightingStation = destinationQuery.text
                 )
             }
         }
@@ -798,6 +833,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp)
     ) {
