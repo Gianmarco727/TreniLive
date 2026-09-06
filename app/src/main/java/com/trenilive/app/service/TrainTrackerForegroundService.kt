@@ -41,26 +41,43 @@ class TrainTrackerForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        initMediaSession()
+        ensureMediaSessionState(0)
     }
 
-    private fun initMediaSession() {
+    private fun ensureMediaSessionState(progressPercentage: Int = 0) {
         val liveManager = LiveTrainManager(this)
-        if (liveManager.isMediaSessionBypassEnabled() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                nativeMediaSession = MediaSession(this, "TreniLiveMediaSession").apply {
-                    isActive = true
-                    val state = PlaybackState.Builder()
-                        .setState(PlaybackState.STATE_NONE, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0.0f)
-                        .setActions(0L)
-                        .build()
-                    setPlaybackState(state)
+        val shouldEnableBypass = liveManager.isMediaSessionBypassEnabled()
+
+        if (shouldEnableBypass) {
+            val currentPosMs = (progressPercentage.coerceIn(0, 100)) * 1000L
+            val state = PlaybackState.Builder()
+                .setState(PlaybackState.STATE_PLAYING, currentPosMs, 0.0f)
+                .setActions(0L)
+                .build()
+
+            if (nativeMediaSession == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                try {
+                    nativeMediaSession = MediaSession(this, "TreniLiveMediaSession").apply {
+                        isActive = true
+                        setPlaybackState(state)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } else {
+                nativeMediaSession?.isActive = true
+                nativeMediaSession?.setPlaybackState(state)
             }
         } else {
-            nativeMediaSession = null
+            if (nativeMediaSession != null) {
+                try {
+                    nativeMediaSession?.isActive = false
+                    nativeMediaSession?.release()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                nativeMediaSession = null
+            }
         }
     }
 
@@ -71,6 +88,15 @@ class TrainTrackerForegroundService : Service() {
             ACTION_STOP_TRACKING -> {
                 stopTracking()
             }
+            ACTION_REFRESH_NOTIF -> {
+                ensureMediaSessionState(0)
+                val currentTrain = activeTrainNumber
+                if (!currentTrain.isNullOrBlank()) {
+                    serviceScope.launch {
+                        updateTrainStatus()
+                    }
+                }
+            }
             ACTION_START_TRACKING -> {
                 val trainNumber = intent?.getStringExtra(EXTRA_TRAIN_NUMBER)
                 val stationId = intent?.getStringExtra(EXTRA_STATION_ID)
@@ -80,7 +106,18 @@ class TrainTrackerForegroundService : Service() {
                     activeTrainNumber = trainNumber
                     activeStationId = stationId
                     activeTimestamp = timestamp
-                    startTracking()
+
+                    if (isTracking) {
+                        serviceScope.launch {
+                            updateTrainStatus()
+                        }
+                    } else {
+                        startTracking()
+                    }
+                } else if (isTracking) {
+                    serviceScope.launch {
+                        updateTrainStatus()
+                    }
                 } else {
                     stopSelf()
                 }
@@ -93,6 +130,8 @@ class TrainTrackerForegroundService : Service() {
     private fun startTracking() {
         val trainNumber = activeTrainNumber ?: return
         isTracking = true
+
+        ensureMediaSessionState(0)
 
         val initialNotification = buildNotification(
             title = "Tracciamento Treno $trainNumber",
@@ -129,6 +168,8 @@ class TrainTrackerForegroundService : Service() {
     private suspend fun updateTrainStatus() {
         val trainNumber = activeTrainNumber ?: return
 
+        ensureMediaSessionState()
+
         var stationId = activeStationId
         var timestamp = activeTimestamp
 
@@ -153,6 +194,7 @@ class TrainTrackerForegroundService : Service() {
         when (val statusRes = ViaggiaTrenoService.fetchTrainStatus(trainNumber, safeStationId, safeTimestamp)) {
             is ViaggiaTrenoResult.Success -> {
                 val status = statusRes.data
+                ensureMediaSessionState(status.progressPercentage)
                 val notification = buildNotificationFromStatus(status)
                 notifySafely(notification)
 
@@ -222,6 +264,7 @@ class TrainTrackerForegroundService : Service() {
                     .putString(MediaMetadata.METADATA_KEY_TITLE, title)
                     .putString(MediaMetadata.METADATA_KEY_ARTIST, shortContent)
                     .putString(MediaMetadata.METADATA_KEY_ALBUM, "TreniLive Tracker")
+                    .putLong(MediaMetadata.METADATA_KEY_DURATION, 100000L)
                     .build()
                 nativeMediaSession?.setMetadata(metadata)
             } catch (e: Exception) {
@@ -307,11 +350,29 @@ class TrainTrackerForegroundService : Service() {
                     ).build()
                 )
 
-            nativeMediaSession?.sessionToken?.let { token ->
-                val mediaStyle = Notification.MediaStyle().setMediaSession(token)
-                builder.setStyle(mediaStyle)
-            } ?: run {
-                builder.setStyle(Notification.BigTextStyle().bigText(expandedContent))
+            // Se l'opzione MediaSession Bypass è stata attivata dalle Opzioni Sviluppatore:
+            // imposta MediaStyle E NON SOVRASCRIVERLO DOPO!
+            if (nativeMediaSession != null) {
+                nativeMediaSession?.sessionToken?.let { token ->
+                    val mediaStyle = Notification.MediaStyle().setMediaSession(token)
+                    builder.setStyle(mediaStyle)
+                }
+            } else {
+                if (Build.VERSION.SDK_INT >= 36) {
+                    try {
+                        val progressStyleClass = Class.forName("android.app.Notification\$ProgressStyle")
+                        val progressStyle = progressStyleClass.getDeclaredConstructor().newInstance()
+                        val setProgressMethod = progressStyleClass.getMethod("setProgress", Int::class.javaPrimitiveType)
+                        setProgressMethod.invoke(progressStyle, progress)
+
+                        val setStyleMethod = builder.javaClass.getMethod("setStyle", Class.forName("android.app.Notification\$Style"))
+                        setStyleMethod.invoke(builder, progressStyle)
+                    } catch (e: Throwable) {
+                        builder.setStyle(Notification.BigTextStyle().bigText(expandedContent))
+                    }
+                } else {
+                    builder.setStyle(Notification.BigTextStyle().bigText(expandedContent))
+                }
             }
 
             if (!isInitial) {
@@ -358,22 +419,6 @@ class TrainTrackerForegroundService : Service() {
                 } catch (e: Throwable) {
                     extras.putString("android.shortCriticalText", chipText)
                 }
-            }
-
-            if (Build.VERSION.SDK_INT >= 36) {
-                try {
-                    val progressStyleClass = Class.forName("android.app.Notification\$ProgressStyle")
-                    val progressStyle = progressStyleClass.getDeclaredConstructor().newInstance()
-                    val setProgressMethod = progressStyleClass.getMethod("setProgress", Int::class.javaPrimitiveType)
-                    setProgressMethod.invoke(progressStyle, progress)
-
-                    val setStyleMethod = builder.javaClass.getMethod("setStyle", Class.forName("android.app.Notification\$Style"))
-                    setStyleMethod.invoke(builder, progressStyle)
-                } catch (e: Throwable) {
-                    builder.setStyle(Notification.BigTextStyle().bigText(expandedContent))
-                }
-            } else {
-                builder.setStyle(Notification.BigTextStyle().bigText(expandedContent))
             }
 
             val notif = builder.build()
@@ -490,6 +535,7 @@ class TrainTrackerForegroundService : Service() {
 
         const val ACTION_START_TRACKING = "com.trenilive.app.START_TRACKING"
         const val ACTION_STOP_TRACKING = "com.trenilive.app.STOP_TRACKING"
+        const val ACTION_REFRESH_NOTIF = "com.trenilive.app.REFRESH_NOTIF"
 
         const val EXTRA_TRAIN_NUMBER = "extra_train_number"
         const val EXTRA_STATION_ID = "extra_station_id"

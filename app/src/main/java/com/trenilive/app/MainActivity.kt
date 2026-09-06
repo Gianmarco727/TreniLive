@@ -1167,6 +1167,16 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                         onCheckedChange = { checked ->
                             isMediaSessionBypass = checked
                             liveManager.setMediaSessionBypassEnabled(checked)
+
+                            // Invia il segnale di refresh immediato al ForegroundService attivo
+                            val refreshIntent = Intent(context, TrainTrackerForegroundService::class.java).apply {
+                                action = TrainTrackerForegroundService.ACTION_REFRESH_NOTIF
+                            }
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                context.startForegroundService(refreshIntent)
+                            } else {
+                                context.startService(refreshIntent)
+                            }
                         }
                     )
                 }
