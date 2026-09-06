@@ -373,10 +373,10 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        // CARD DI RICERCA UNIFICATA
+        // CARD DI RICERCA UNIFICATA CON ANGOLI ARROTONDATI M3
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             ),
@@ -437,7 +437,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(16.dp)
                 )
 
                 if (trainNumberInput.isNotBlank()) {
@@ -446,6 +446,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                         onClick = { searchByTrainNumber(trainNumberInput) },
                         enabled = !isLoading,
                         modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E))
                     ) {
                         Text("Cerca Treno $trainNumberInput", fontWeight = FontWeight.Bold)
@@ -507,7 +508,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                     placeholder = { Text("Stazione di Partenza") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(16.dp),
                     trailingIcon = {
                         if (originQuery.text.isNotBlank()) {
                             IconButton(onClick = {
@@ -529,7 +530,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                 if (originSuggestions.isNotEmpty() && selectedOriginStation == null) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(16.dp),
                         shadowElevation = 4.dp
                     ) {
                         Column {
@@ -582,7 +583,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                     placeholder = { Text("Stazione di Destinazione") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(16.dp),
                     trailingIcon = {
                         if (destinationQuery.text.isNotBlank()) {
                             IconButton(onClick = {
@@ -604,7 +605,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                 if (destinationSuggestions.isNotEmpty() && selectedDestinationStation == null) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(16.dp),
                         shadowElevation = 4.dp
                     ) {
                         Column {
@@ -641,7 +642,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                     OutlinedButton(
                         onClick = showDatePicker,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(14.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -663,7 +664,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                     OutlinedButton(
                         onClick = showTimePicker,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(14.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -687,7 +688,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Surface(
                         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
@@ -708,7 +709,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E))
                 ) {
                     if (isLoading) {
@@ -769,7 +770,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                         .clickable {
                             searchByDeparture(departure)
                         },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = if (isCurrentlySelected) Color(0xFFFFF0F2) else MaterialTheme.colorScheme.surface
                     ),
@@ -998,7 +999,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(16.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -1020,7 +1021,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
             Surface(
                 color = MaterialTheme.colorScheme.errorContainer,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
@@ -1099,7 +1100,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
         // CARD PER AGGIUNGERE UN TRENO AL LIVE TRACKER
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             )
@@ -1121,7 +1122,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(16.dp)
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1195,8 +1196,8 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                     onClick = { addTrainNumberToLiveTracker(inputTrainNumber) },
                     enabled = !isAdding,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E)),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E))
                 ) {
                     if (isAdding) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -1220,7 +1221,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
         if (liveTrains.isEmpty()) {
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
@@ -1236,7 +1237,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 12.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(24.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -1324,7 +1325,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                                     )
                                 },
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(12.dp)
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -1367,7 +1368,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
         // SEZIONE OPZIONI SVILUPPATORE / DEBUG
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
             )
@@ -1449,7 +1450,7 @@ fun TrainStatusCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -1586,7 +1587,7 @@ fun TrainStatusCard(
 
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -1683,7 +1684,7 @@ fun TrainStatusCard(
                     Spacer(modifier = Modifier.height(16.dp))
                     Surface(
                         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(16.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
                         modifier = Modifier.fillMaxWidth()
                     ) {
