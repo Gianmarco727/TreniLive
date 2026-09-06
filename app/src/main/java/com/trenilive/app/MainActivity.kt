@@ -114,8 +114,16 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
     var trainStatus by remember { mutableStateOf<TrainStatus?>(null) }
     var stationSolutions by remember { mutableStateOf<List<StationDeparture>>(emptyList()) }
 
+    val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+
+    // Quando compaiono nuovi suggerimenti stazioni, effettua l'auto-scroll per mantenerli completamente visibili sopra la tastiera
+    LaunchedEffect(originSuggestions, destinationSuggestions) {
+        if (originSuggestions.isNotEmpty() || destinationSuggestions.isNotEmpty()) {
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
+    }
 
     // Funzione ricerca diretta per numero di treno
     val searchByTrainNumber = { numberToSearch: String ->
@@ -265,7 +273,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxSize()
             .imePadding()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(20.dp),
         horizontalAlignment = Alignment.Start
     ) {
@@ -688,6 +696,9 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
+
+        // Spazio extra in fondo per assicurare ampio margine di scorrimento sopra la tastiera virtuale
+        Spacer(modifier = Modifier.height(200.dp))
     }
 }
 
