@@ -501,6 +501,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                                         .fillMaxWidth()
                                         .clickable {
                                             selectedOriginStation = station
+                                            // Posiziona esplicitamente il cursore alla FINE del testo selezionato
                                             originQuery = TextFieldValue(
                                                 text = station.name,
                                                 selection = TextRange(station.name.length)
@@ -575,6 +576,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                                         .fillMaxWidth()
                                         .clickable {
                                             selectedDestinationStation = station
+                                            // Posiziona esplicitamente il cursore alla FINE del testo selezionato
                                             destinationQuery = TextFieldValue(
                                                 text = station.name,
                                                 selection = TextRange(station.name.length)
@@ -762,7 +764,9 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                                 Text(
                                     text = departure.destination,
                                     fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -1210,12 +1214,16 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                                 )
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
                                         text = config.originStationName,
                                         fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     )
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
@@ -1226,7 +1234,10 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                                     Text(
                                         text = config.destinationStationName,
                                         fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     )
                                 }
                                 Text(
@@ -1440,12 +1451,16 @@ fun TrainStatusCard(
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = status.originStationName,
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
@@ -1456,7 +1471,10 @@ fun TrainStatusCard(
                         Text(
                             text = status.destinationStationName,
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                     }
                 }
