@@ -26,6 +26,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -73,12 +77,36 @@ fun MainTabScreen(modifier: Modifier = Modifier) {
             Tab(
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 },
-                text = { Text("🔍 Cerca Treni", fontWeight = FontWeight.Bold, fontSize = 14.sp) }
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text("Cerca Treni", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                }
             )
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
-                text = { Text("⚡ Live Tracker", fontWeight = FontWeight.Bold, fontSize = 14.sp) }
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text("Live Tracker", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                }
             )
         }
 
@@ -298,7 +326,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
         )
 
-        // BARRA PREFERITI SALVATI ❤️
+        // BARRA PREFERITI SALVATI
         if (favoriteList.isNotEmpty()) {
             Text(
                 text = "I MIEI PREFERITI",
@@ -322,7 +350,20 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                             trainNumberInput = favNum
                             searchByTrainNumber(favNum)
                         },
-                        label = { Text("❤️ $favNum", fontWeight = FontWeight.Bold) },
+                        label = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Favorite,
+                                    contentDescription = null,
+                                    tint = Color(0xFFC8102E),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(favNum, fontWeight = FontWeight.Bold)
+                            }
+                        },
                         colors = SuggestionChipDefaults.suggestionChipColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
                         )
@@ -367,7 +408,11 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                     trailingIcon = {
                         if (trainNumberInput.isNotBlank()) {
                             IconButton(onClick = { trainNumberInput = "" }) {
-                                Text("✖", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Cancella",
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                     },
@@ -431,7 +476,11 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                                 selectedOriginStation = null
                                 originSuggestions = emptyList()
                             }) {
-                                Text("✖", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Cancella",
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                     }
@@ -452,7 +501,6 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                                         .fillMaxWidth()
                                         .clickable {
                                             selectedOriginStation = station
-                                            // Posiziona esplicitamente il cursore alla FINE del testo selezionato
                                             originQuery = TextFieldValue(
                                                 text = station.name,
                                                 selection = TextRange(station.name.length)
@@ -502,7 +550,11 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                                 selectedDestinationStation = null
                                 destinationSuggestions = emptyList()
                             }) {
-                                Text("✖", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Cancella",
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                     }
@@ -523,7 +575,6 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                                         .fillMaxWidth()
                                         .clickable {
                                             selectedDestinationStation = station
-                                            // Posiziona esplicitamente il cursore alla FINE del testo selezionato
                                             destinationQuery = TextFieldValue(
                                                 text = station.name,
                                                 selection = TextRange(station.name.length)
@@ -551,11 +602,21 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text(
-                            text = "📅 " + SimpleDateFormat("dd/MM/yyyy", Locale.ITALY).format(Date(selectedDateMs)),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.CalendarToday,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = SimpleDateFormat("dd/MM/yyyy", Locale.ITALY).format(Date(selectedDateMs)),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
 
                     OutlinedButton(
@@ -563,11 +624,21 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text(
-                            text = "⏰ " + SimpleDateFormat("HH:mm", Locale.ITALY).format(Date(selectedDateMs)),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Schedule,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = SimpleDateFormat("HH:mm", Locale.ITALY).format(Date(selectedDateMs)),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
 
@@ -678,11 +749,22 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                                 fontSize = 16.sp,
                                 color = if (isCurrentlySelected) Color(0xFFC8102E) else MaterialTheme.colorScheme.onSurface
                             )
-                            Text(
-                                text = "➔ ${departure.destination}",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = departure.destination,
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
 
                         Column(horizontalAlignment = Alignment.End) {
@@ -875,11 +957,21 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                 .padding(bottom = 16.dp),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text(
-                text = "⚙️ Abilita 'Notifiche Live' in Impostazioni Samsung",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "Abilita 'Notifiche Live' in Impostazioni Samsung",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
@@ -908,10 +1000,10 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        // AGGIUNTA RAPIDA DAI PREFERITI ❤️
+        // AGGIUNTA RAPIDA DAI PREFERITI
         if (favoriteTrains.isNotEmpty()) {
             Text(
-                text = "AGGIUNGI RAPIDO DAI MIEI PREFERITI ❤️",
+                text = "AGGIUNGI RAPIDO DAI MIEI PREFERITI",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -937,11 +1029,21 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                         },
                         enabled = !isAdding && !isAlreadyAdded,
                         label = {
-                            Text(
-                                text = if (isAlreadyAdded) "✓ Treno $favNum" else "➕ ❤️ Treno $favNum",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isAlreadyAdded) Icons.Default.Check else Icons.Default.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Treno $favNum",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                            }
                         },
                         colors = SuggestionChipDefaults.suggestionChipColors(
                             containerColor = if (isAlreadyAdded) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primaryContainer
@@ -1106,11 +1208,27 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold
                                 )
-                                Text(
-                                    text = "${config.originStationName} ➔ ${config.destinationStationName}",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = config.originStationName,
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Text(
+                                        text = config.destinationStationName,
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                                 Text(
                                     text = "📅 ${config.getDaysFormatted()}",
                                     fontSize = 12.sp,
@@ -1158,14 +1276,35 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text("▶ Avvia Notifica Ora", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text("Avvia Notifica Ora", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
 
                             TextButton(onClick = {
                                 liveTrains = liveManager.removeLiveTrain(config.id)
                                 TrainTrackerForegroundService.stopService(context)
                             }) {
-                                Text("🗑️ Rimuovi", color = Color(0xFFD32F2F), fontSize = 12.sp)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Delete,
+                                        contentDescription = null,
+                                        tint = Color(0xFFD32F2F),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text("Rimuovi", color = Color(0xFFD32F2F), fontSize = 12.sp)
+                                }
                             }
                         }
                     }
@@ -1184,12 +1323,23 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
             )
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "🛠️ OPZIONI SVILUPPATORE (DEBUG)",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.secondary
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Build,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "OPZIONI SVILUPPATORE (DEBUG)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
 
                 Row(
                     modifier = Modifier
@@ -1256,7 +1406,7 @@ fun TrainStatusCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            // Header: Categoria/Numero + Preferito ❤️ + Bottone Chiudi ✖ + Badge Ritardo
+            // Header: Categoria/Numero + Preferito + Bottone Chiudi + Badge Ritardo
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1280,17 +1430,35 @@ fun TrainStatusCard(
                             onClick = onToggleFavorite,
                             modifier = Modifier.size(36.dp)
                         ) {
-                            Text(
-                                text = if (isFavorite) "❤️" else "🤍",
-                                fontSize = 20.sp
+                            Icon(
+                                imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                contentDescription = "Preferito",
+                                tint = if (isFavorite) Color(0xFFC8102E) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
-                    Text(
-                        text = "${status.originStationName} ➔ ${status.destinationStationName}",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = status.originStationName,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = status.destinationStationName,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1317,14 +1485,18 @@ fun TrainStatusCard(
 
                     Spacer(modifier = Modifier.width(6.dp))
 
-                    // Bottone Chiudi Dettaglio ✖
+                    // Bottone Chiudi Dettaglio
                     OutlinedButton(
                         onClick = onCloseDetail,
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.height(34.dp)
                     ) {
-                        Text("✖", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Chiudi",
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }
