@@ -9,6 +9,7 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -357,16 +358,17 @@ object ViaggiaTrenoService {
         }
 
     /**
-     * Verifica se un treno viaggia nella DIREZIONE CORRETTA (stazione di partenza PRIMA della stazione di arrivo).
+     * Verifica se un treno viaggia nella DIREZIONE CORRETTA E che sia un treno VALIDO (non nel passato o già giunto a destinazione).
      */
     private suspend fun isTrainInCorrectDirection(
         trainNumber: String,
         originStationId: String,
         departureTimestampMs: Long,
         originNameQuery: String,
-        destinationNameQuery: String
+        destinationNameQuery: String,
+        searchDate: Date
     ): Boolean {
-        var stops: List<TrainStop>? = null
+        var status: TrainStatus? = null
 
         // 1. Risolve il percorso ufficiale del treno
         val resolveRes = resolveTrain(trainNumber)
@@ -374,18 +376,20 @@ object ViaggiaTrenoService {
             val (num, depId, ts) = resolveRes.data
             val statusRes = fetchTrainStatus(num, depId, ts)
             if (statusRes is ViaggiaTrenoResult.Success) {
-                stops = statusRes.data.stops
+                status = statusRes.data
             }
         }
 
-        if (stops.isNullOrEmpty() && departureTimestampMs > 0) {
+        if (status == null && departureTimestampMs > 0) {
             val statusRes = fetchTrainStatus(trainNumber, originStationId, departureTimestampMs.toString())
             if (statusRes is ViaggiaTrenoResult.Success) {
-                stops = statusRes.data.stops
+                status = statusRes.data
             }
         }
 
-        if (stops.isNullOrEmpty()) return false
+        val trainStatus = status ?: return false
+        val stops = trainStatus.stops
+        if (stops.isEmpty()) return false
 
         val cleanOrigin = originNameQuery.trim().lowercase()
         val cleanDest = destinationNameQuery.trim().lowercase()
@@ -405,8 +409,44 @@ object ViaggiaTrenoService {
                     stop.stationName.lowercase().contains(cleanDest)
         }
 
-        // Deve trovare ENTRAMBE le stazioni E la stazione di salita deve precedere quella di discesa
-        return originIdx >= 0 && destIdx >= 0 && originIdx < destIdx
+        // 1. Deve trovare ENTRAMBE le stazioni E la stazione di salita deve precedere quella di discesa
+        if (originIdx < 0 || destIdx < 0 || originIdx >= destIdx) {
+            return false
+        }
+
+        val boardingStop = stops[originIdx]
+        val alightingStop = stops[destIdx]
+
+        // 2. Filtra treni già giunti a destinazione finale o soppressi
+        if (trainStatus.isCancelled || trainStatus.progressPercentage >= 100) {
+            return false
+        }
+
+        // 3. Filtra treni che hanno già superato la stazione di salita o discesa dell'utente
+        if (boardingStop.isPassed || alightingStop.isPassed) {
+            return false
+        }
+
+        // 4. Per ricerche odierne, verifica che l'orario di partenza dalla stazione di salita non sia già passato
+        val boardingDepartureTimeMs = boardingStop.actualOrEstimatedTimeMs
+            ?: boardingStop.scheduledTimeMs
+            ?: departureTimestampMs
+
+        val isSearchDateToday = isSameDay(searchDate, Date())
+        val searchCutoffTimeMs = searchDate.time - 5 * 60 * 1000L // 5 minuti di tolleranza
+
+        if (isSearchDateToday && boardingDepartureTimeMs < searchCutoffTimeMs) {
+            return false
+        }
+
+        return true
+    }
+
+    private fun isSameDay(date1: Date, date2: Date): Boolean {
+        val cal1 = Calendar.getInstance().apply { time = date1 }
+        val cal2 = Calendar.getInstance().apply { time = date2 }
+        return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
+                cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
     }
 
     /**
@@ -445,7 +485,8 @@ object ViaggiaTrenoService {
                         originStationId = originStationId,
                         departureTimestampMs = dep.departureTimestampMs,
                         originNameQuery = originNameQuery,
-                        destinationNameQuery = destinationQuery
+                        destinationNameQuery = destinationQuery,
+                        searchDate = currentSearchDate
                     )
 
                     if (isMatch) {
@@ -476,7 +517,7 @@ object ViaggiaTrenoService {
 
         return try {
             val responseCode = connection.responseCode
-            if (responseCode in 200..299) {
+            if (responseCode in 200..200) {
                 BufferedReader(InputStreamReader(connection.inputStream)).use { reader ->
                     reader.readText()
                 }
