@@ -367,9 +367,9 @@ class TrainTrackerForegroundService : Service() {
                         val setProgressMethod = progressStyleClass.getMethod("setProgress", Int::class.javaPrimitiveType)
                         setProgressMethod.invoke(progressStyle, progress)
 
-                        // 2. Imposta l'icona del treno dell'app specchiata orizzontalmente (ic_train_mono_flipped) sulla punta della progress bar
+                        // 2. Imposta l'icona del treno 3 monocromatica bianca specchiata (ic_progress_train3) con scala 0.25 sulla punta della progress bar
                         try {
-                            val trainIcon = Icon.createWithResource(this, R.drawable.ic_train_mono_flipped)
+                            val trainIcon = Icon.createWithResource(this, R.drawable.ic_progress_train3)
                             val setTrackerIconMethod = progressStyleClass.methods.firstOrNull {
                                 it.name == "setProgressTrackerIcon" || it.name == "setTrackerIcon" || it.name == "setProgressPointIcon"
                             }
