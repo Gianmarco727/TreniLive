@@ -367,9 +367,9 @@ class TrainTrackerForegroundService : Service() {
                         val setProgressMethod = progressStyleClass.getMethod("setProgress", Int::class.javaPrimitiveType)
                         setProgressMethod.invoke(progressStyle, progress)
 
-                        // 2. Imposta l'icona del treno in profilo orientata verso DESTRA (ic_progress_train) sulla punta della progress bar
+                        // 2. Imposta l'icona del treno dell'app specchiata orizzontalmente (ic_train_mono_flipped) sulla punta della progress bar
                         try {
-                            val trainIcon = Icon.createWithResource(this, R.drawable.ic_progress_train)
+                            val trainIcon = Icon.createWithResource(this, R.drawable.ic_train_mono_flipped)
                             val setTrackerIconMethod = progressStyleClass.methods.firstOrNull {
                                 it.name == "setProgressTrackerIcon" || it.name == "setTrackerIcon" || it.name == "setProgressPointIcon"
                             }
@@ -505,7 +505,7 @@ class TrainTrackerForegroundService : Service() {
     }
 
     override fun onDestroy() {
- super.onDestroy()
+        super.onDestroy()
         isTracking = false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             try {
