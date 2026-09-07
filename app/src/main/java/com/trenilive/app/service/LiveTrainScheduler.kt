@@ -6,9 +6,13 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import com.trenilive.app.data.LiveTrainConfig
 import com.trenilive.app.data.LiveTrainManager
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import kotlin.math.abs
 
 class BootReceiver : BroadcastReceiver() {
@@ -23,6 +27,8 @@ class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val trainNumber = intent.getStringExtra(LiveTrainScheduler.EXTRA_TRAIN_NUMBER)
         val stationId = intent.getStringExtra(LiveTrainScheduler.EXTRA_STATION_ID)
+
+        Log.d("LiveTrainScheduler", "AlarmReceiver scattato per treno $trainNumber!")
 
         if (!trainNumber.isNullOrBlank()) {
             TrainTrackerForegroundService.startService(
@@ -130,6 +136,7 @@ object LiveTrainScheduler {
         liveTrains.filter { it.isEnabled }.forEach { config ->
             // 1. Se il treno è nella sua finestra di viaggio odierna, avvia subito il tracciamento
             if (isTrainInActiveWindow(config)) {
+                Log.d("LiveTrainScheduler", "Treno ${config.trainNumber} nella finestra attiva: avvio servizio tracciamento.")
                 TrainTrackerForegroundService.startService(
                     context = context,
                     trainNumber = config.trainNumber,
@@ -153,21 +160,44 @@ object LiveTrainScheduler {
                 )
 
                 try {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        alarmManager.setExactAndAllowWhileIdle(
-                            AlarmManager.RTC_WAKEUP,
-                            nextAlarmMs,
-                            pendingIntent
-                        )
+                    val canScheduleExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        alarmManager.canScheduleExactAlarms()
+                    } else true
+
+                    if (canScheduleExact) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            alarmManager.setExactAndAllowWhileIdle(
+                                AlarmManager.RTC_WAKEUP,
+                                nextAlarmMs,
+                                pendingIntent
+                            )
+                        } else {
+                            alarmManager.setExact(
+                                AlarmManager.RTC_WAKEUP,
+                                nextAlarmMs,
+                                pendingIntent
+                            )
+                        }
                     } else {
-                        alarmManager.setExact(
+                        alarmManager.setAndAllowWhileIdle(
                             AlarmManager.RTC_WAKEUP,
                             nextAlarmMs,
                             pendingIntent
                         )
                     }
+                    val formattedDate = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.ITALY).format(Date(nextAlarmMs))
+                    Log.d("LiveTrainScheduler", "Alarm programmato con successo per Treno ${config.trainNumber} alle $formattedDate")
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.e("LiveTrainScheduler", "Errore impostazione allarme esatto: ${e.message}, tentato fallback setAndAllowWhileIdle")
+                    try {
+                        alarmManager.setAndAllowWhileIdle(
+                            AlarmManager.RTC_WAKEUP,
+                            nextAlarmMs,
+                            pendingIntent
+                        )
+                    } catch (e2: Exception) {
+                        e2.printStackTrace()
+                    }
                 }
             }
         }

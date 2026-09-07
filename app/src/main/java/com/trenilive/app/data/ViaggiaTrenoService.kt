@@ -50,6 +50,25 @@ object ViaggiaTrenoService {
         }
 
     /**
+     * Formatta un timestamp in millisecondi nell'ora locale italiana ("HH:mm").
+     */
+    private fun formatTimestampToLocalTime(timestampMs: Long?): String {
+        if (timestampMs == null || timestampMs <= 0) return "--:--"
+        val sdf = SimpleDateFormat("HH:mm", Locale.ITALY)
+        return sdf.format(Date(timestampMs))
+    }
+
+    private fun parseTimeHoursMinutes(timeStr: String): Pair<Int, Int>? {
+        if (timeStr.isBlank() || !timeStr.contains(":")) return null
+        return try {
+            val parts = timeStr.trim().split(":")
+            Pair(parts[0].toInt(), parts[1].toInt())
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
      * Converte numeri romani per i binari programmati (es. "I" -> "1", "III" -> "3") in numeri arabi.
      */
     private fun formatPlatformNumber(platformStr: String): String {
@@ -328,12 +347,33 @@ object ViaggiaTrenoService {
                     val num = obj.optString("numeroTreno", "")
                     val cat = obj.optString("categoria", "REG")
                     val dest = obj.optString("destinazione", "Destinazione sconosciuta")
-                    val timeFormatted = obj.optString("compOrarioPartenza", "--:--")
                     val delay = obj.optInt("ritardo", 0)
                     val originId = obj.optString("codOrigine", stationId)
-                    val departureTimestampMs = obj.optLong("dataPartenzaTreno", 0L)
                     val (scheduledPlat, actualPlat) = extractPlatform(obj)
                     val platform = actualPlat ?: scheduledPlat
+
+                    val compTime = obj.optString("compOrarioPartenza", "").trim()
+                    val orarioPartenzaMs = obj.optLong("orarioPartenza", 0L)
+                    val dataPartenzaTrenoMs = obj.optLong("dataPartenzaTreno", 0L)
+
+                    val departureTimeFormatted = if (compTime.isNotBlank() && compTime != "--:--") {
+                        compTime
+                    } else if (orarioPartenzaMs > 0 && orarioPartenzaMs != dataPartenzaTrenoMs) {
+                        formatTimestampToLocalTime(orarioPartenzaMs)
+                    } else {
+                        "--:--"
+                    }
+
+                    val departureTimestampMs = if (orarioPartenzaMs > 0 && orarioPartenzaMs != dataPartenzaTrenoMs) {
+                        orarioPartenzaMs
+                    } else {
+                        val (h, m) = parseTimeHoursMinutes(departureTimeFormatted) ?: Pair(0, 0)
+                        if (dataPartenzaTrenoMs > 0) {
+                            dataPartenzaTrenoMs + (h * 3600 + m * 60) * 1000L
+                        } else {
+                            date.time
+                        }
+                    }
 
                     if (num.isNotBlank()) {
                         departures.add(
@@ -341,7 +381,7 @@ object ViaggiaTrenoService {
                                 trainNumber = num,
                                 category = cat,
                                 destination = dest,
-                                departureTimeFormatted = timeFormatted,
+                                departureTimeFormatted = departureTimeFormatted,
                                 delayMinutes = delay,
                                 originStationId = originId,
                                 departureTimestampMs = departureTimestampMs,

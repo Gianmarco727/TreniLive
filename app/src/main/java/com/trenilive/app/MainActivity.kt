@@ -1194,6 +1194,12 @@ private suspend fun programTrainInLiveTracker(
         is ViaggiaTrenoResult.Error -> {}
     }
 
+    val departureTimeLocal = if (departure.departureTimestampMs > 0) {
+        formatTime(departure.departureTimestampMs)
+    } else {
+        departure.departureTimeFormatted
+    }
+
     val newConfig = LiveTrainConfig(
         id = UUID.randomUUID().toString(),
         trainNumber = departure.trainNumber,
@@ -1204,7 +1210,7 @@ private suspend fun programTrainInLiveTracker(
         originStationId = originStationId,
         originStationName = originStationName,
         destinationStationName = destinationStationName,
-        scheduledDepartureTime = departure.departureTimeFormatted,
+        scheduledDepartureTime = departureTimeLocal,
         isEnabled = true,
         monitoredStops = autoMonitoredStops
     )
@@ -2574,6 +2580,8 @@ fun TrainStatusCard(
                             }
                         }
 
+                        val departureTimeLocal = status.stops.firstOrNull()?.scheduledTimeMs?.let { formatTime(it) } ?: ""
+
                         val newConfig = LiveTrainConfig(
                             id = UUID.randomUUID().toString(),
                             trainNumber = status.trainNumber,
@@ -2584,7 +2592,7 @@ fun TrainStatusCard(
                             originStationId = "",
                             originStationName = status.originStationName,
                             destinationStationName = status.destinationStationName,
-                            scheduledDepartureTime = "",
+                            scheduledDepartureTime = departureTimeLocal,
                             isEnabled = true,
                             monitoredStops = autoMonitoredStops
                         )
