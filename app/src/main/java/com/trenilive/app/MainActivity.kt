@@ -373,12 +373,12 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        // CARD DI RICERCA UNIFICATA CON COLORE UNIFORME E SENZA DOPPIO Sfondo
+        // CARD DI RICERCA UNIFICATA CON LO STESSO GRIGIO ESATTO DEL LIVE TRACKER
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
@@ -1122,7 +1122,8 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            )
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
