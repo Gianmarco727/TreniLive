@@ -1217,12 +1217,15 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                     enabled = !isAdding,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E))
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFC8102E),
+                        contentColor = Color.White
+                    )
                 ) {
                     if (isAdding) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("Aggiungi a Live Tracker", fontWeight = FontWeight.Bold)
+                        Text("Aggiungi a Live Tracker", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
