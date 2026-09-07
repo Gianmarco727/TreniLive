@@ -18,6 +18,14 @@ class LiveTrainManager(context: Context) {
         prefs.edit().putBoolean(KEY_MEDIA_SESSION_BYPASS, enabled).commit()
     }
 
+    fun isSamsungHintDismissed(): Boolean {
+        return prefs.getBoolean(KEY_SAMSUNG_HINT_DISMISSED, false)
+    }
+
+    fun setSamsungHintDismissed(dismissed: Boolean) {
+        prefs.edit().putBoolean(KEY_SAMSUNG_HINT_DISMISSED, dismissed).commit()
+    }
+
     fun getLiveTrains(): List<LiveTrainConfig> {
         val jsonString = prefs.getString(KEY_LIVE_TRAINS, "[]") ?: "[]"
         val list = mutableListOf<LiveTrainConfig>()
@@ -142,5 +150,6 @@ class LiveTrainManager(context: Context) {
         private const val PREFS_NAME = "live_train_tracker_prefs"
         private const val KEY_LIVE_TRAINS = "saved_live_trains"
         private const val KEY_MEDIA_SESSION_BYPASS = "key_media_session_bypass"
+        private const val KEY_SAMSUNG_HINT_DISMISSED = "key_samsung_hint_dismissed"
     }
 }

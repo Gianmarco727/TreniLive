@@ -972,6 +972,9 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
     // Gestione Selezione Fermate Monitorate
     var selectedConfigForStops by remember { mutableStateOf<LiveTrainConfig?>(null) }
 
+    // Gestione Banner Suggerimento Impostazioni Samsung Dismissable
+    var isSamsungHintDismissed by remember { mutableStateOf(liveManager.isSamsungHintDismissed()) }
+
     val coroutineScope = rememberCoroutineScope()
 
     // Dialog selezione fermate monitorate (fino a 4 fermate)
@@ -1126,28 +1129,70 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
         )
 
-        // Pulsante di accesso rapido alle impostazioni di sistema per le Notifiche Live Samsung One UI
-        OutlinedButton(
-            onClick = { openSystemPromotedSettings() },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            shape = RoundedCornerShape(16.dp)
+        // Banner di suggerimento per le Impostazioni Notifiche Live Samsung One UI (Dismissable ✖)
+        AnimatedVisibility(
+            visible = !isSamsungHintDismissed,
+            enter = fadeIn(),
+            exit = fadeOut()
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Text(
-                    text = "Abilita 'Notifiche Live' in Impostazioni Samsung",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { openSystemPromotedSettings() },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Abilita 'Notifiche Live' in Impostazioni",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Text(
+                                text = "Tocca per accedere alle impostazioni di sistema",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = {
+                            isSamsungHintDismissed = true
+                            liveManager.setSamsungHintDismissed(true)
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Chiudi suggerimento",
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
             }
         }
 
