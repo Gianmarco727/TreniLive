@@ -1123,7 +1123,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "I treni salvati qui attivano automaticamente la notifica Live Ongoing nei giorni programmati.",
+            text = "I treni salvati qui attivano automaticamente la notifica Live nei giorni programmati.",
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
@@ -1165,15 +1165,10 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                         )
                         Column {
                             Text(
-                                text = "Abilita 'Notifiche Live' in Impostazioni",
+                                text = "Tocca qui per abilitare 'Notifiche Live' in Impostazioni",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                            Text(
-                                text = "Tocca per accedere alle impostazioni di sistema",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
                             )
                         }
                     }
@@ -1512,9 +1507,9 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                                 )
                                 Text(
                                     text = if (config.monitoredStops.isEmpty()) {
-                                        "📍 Imposta Fermate sulla Barra (Opzionale)"
+                                        "Imposta Fermate sulla Barra (Opzionale)"
                                     } else {
-                                        "📍 Fermate Monitorate (${config.monitoredStops.size}/4)"
+                                        "Fermate Monitorate (${config.monitoredStops.size}/4)"
                                     },
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
