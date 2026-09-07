@@ -375,8 +375,8 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                 )
                 Text(
                     text = "Tieni premuto per rimuovere",
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -388,11 +388,9 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 favoriteList.forEach { favNum ->
-                    SuggestionChip(
-                        onClick = {
-                            trainNumberInput = favNum
-                            searchByTrainNumber(favNum)
-                        },
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
                         modifier = Modifier.combinedClickable(
                             onClick = {
                                 trainNumberInput = favNum
@@ -401,25 +399,27 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                             onLongClick = {
                                 favoriteToRemove = favNum
                             }
-                        ),
-                        label = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Favorite,
-                                    contentDescription = null,
-                                    tint = Color(0xFFC8102E),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(favNum, fontWeight = FontWeight.Bold)
-                            }
-                        },
-                        colors = SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
                         )
-                    )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Favorite,
+                                contentDescription = null,
+                                tint = Color(0xFFC8102E),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = favNum,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -753,42 +753,47 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                 errorMessage?.let { error ->
                     Spacer(modifier = Modifier.height(12.dp))
                     Surface(
-                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
+                        Column(modifier = Modifier.padding(12.dp)) {
                             Text(
                                 text = error,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
-                                fontSize = 13.sp
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
                             )
 
                             val searchingNum = trainNumberInput.trim()
                             if (searchingNum.isNotBlank() && favoritesManager.isFavorite(searchingNum)) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                OutlinedButton(
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Button(
                                     onClick = {
                                         favoritesManager.toggleFavorite(searchingNum)
                                         favoriteList = favoritesManager.getFavoriteTrains()
                                         errorMessage = null
                                     },
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                    shape = RoundedCornerShape(10.dp)
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.error,
+                                        contentColor = Color.White
+                                    )
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Outlined.Delete,
                                             contentDescription = null,
-                                            tint = Color(0xFFD32F2F),
+                                            tint = Color.White,
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Text(
                                             text = "Rimuovi Treno $searchingNum dai Preferiti",
-                                            color = Color(0xFFD32F2F),
+                                            color = Color.White,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold
                                         )
