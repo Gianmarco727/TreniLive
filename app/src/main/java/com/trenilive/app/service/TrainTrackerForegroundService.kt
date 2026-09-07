@@ -358,12 +358,25 @@ class TrainTrackerForegroundService : Service() {
                     builder.setStyle(mediaStyle)
                 }
             } else {
-                if (Build.VERSION.SDK_INT >= 36) {
+                if (Build.VERSION.SDK_INT >= 35) {
                     try {
                         val progressStyleClass = Class.forName("android.app.Notification\$ProgressStyle")
                         val progressStyle = progressStyleClass.getDeclaredConstructor().newInstance()
+
+                        // 1. Imposta la percentuale di avanzamento della progress bar
                         val setProgressMethod = progressStyleClass.getMethod("setProgress", Int::class.javaPrimitiveType)
                         setProgressMethod.invoke(progressStyle, progress)
+
+                        // 2. Imposta l'icona del treno minimal monocromatica (ic_train_mono) sulla punta della progress bar
+                        try {
+                            val trainIcon = Icon.createWithResource(this, R.drawable.ic_train_mono)
+                            val setTrackerIconMethod = progressStyleClass.methods.firstOrNull {
+                                it.name == "setProgressTrackerIcon" || it.name == "setTrackerIcon" || it.name == "setProgressPointIcon"
+                            }
+                            setTrackerIconMethod?.invoke(progressStyle, trainIcon)
+                        } catch (e: Throwable) {
+                            e.printStackTrace()
+                        }
 
                         val setStyleMethod = builder.javaClass.getMethod("setStyle", Class.forName("android.app.Notification\$Style"))
                         setStyleMethod.invoke(builder, progressStyle)
