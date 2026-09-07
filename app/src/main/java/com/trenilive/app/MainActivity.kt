@@ -938,46 +938,48 @@ fun TrainTrackerScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        // Mostra il pulsante "Programma nel Live Tracker" SOLO nella soluzione selezionata/aperta
+                        if (isCurrentlySelected) {
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                        // Pulsante Intelligente ad Azione Rapida Opzione B: Programma nel Live Tracker
-                        Button(
-                            onClick = {
-                                coroutineScope.launch {
-                                    programTrainInLiveTracker(
-                                        departure = departure,
-                                        originQueryText = originQuery.text,
-                                        destinationQueryText = destinationQuery.text,
-                                        context = context,
-                                        onComplete = {
-                                            onSwitchToLiveTracker()
-                                        }
+                            Button(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        programTrainInLiveTracker(
+                                            departure = departure,
+                                            originQueryText = originQuery.text,
+                                            destinationQueryText = destinationQuery.text,
+                                            context = context,
+                                            onComplete = {
+                                                onSwitchToLiveTracker()
+                                            }
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Bolt,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Programma nel Live Tracker",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimary
                                     )
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFC8102E),
-                                contentColor = Color.White
-                            )
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Bolt,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "⚡ Programma nel Live Tracker",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
                             }
                         }
                     }
@@ -1080,7 +1082,7 @@ private suspend fun programTrainInLiveTracker(
 
     Toast.makeText(
         context,
-        "⚡ Treno ${departure.trainNumber} salvato nel Live Tracker con le tue fermate!",
+        "Treno ${departure.trainNumber} salvato nel Live Tracker con le tue fermate!",
         Toast.LENGTH_LONG
     ).show()
 
@@ -1269,7 +1271,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "I treni salvati qui attivano automaticamente la notifica Live nei giorni programmati.",
+            text = "I treni salvati qui attivalo automaticamente la notifica Live nei giorni programmati.",
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
