@@ -17,6 +17,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -41,6 +44,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextRange
@@ -116,20 +120,24 @@ fun MainTabScreen(modifier: Modifier = Modifier) {
             )
         }
 
-        // Mantiene sia TrainTrackerScreen che LiveTrackerScreen sempre attivi in memoria per preservare lo stato
+        // Mantiene sia TrainTrackerScreen che LiveTrackerScreen sempre attivi nella gerarchia per preservare al 100% lo stato di ricerca
         Box(modifier = Modifier.fillMaxSize()) {
-            androidx.compose.animation.AnimatedVisibility(
-                visible = selectedTab == 0,
-                enter = fadeIn(),
-                exit = fadeOut()
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = if (selectedTab == 0) 1f else 0f
+                    }
             ) {
                 TrainTrackerScreen(onSwitchToLiveTracker = { selectedTab = 1 })
             }
 
-            androidx.compose.animation.AnimatedVisibility(
-                visible = selectedTab == 1,
-                enter = fadeIn(),
-                exit = fadeOut()
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = if (selectedTab == 1) 1f else 0f
+                    }
             ) {
                 LiveTrackerScreen()
             }
@@ -980,7 +988,11 @@ fun TrainTrackerScreen(
                     border = if (isExpanded) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
