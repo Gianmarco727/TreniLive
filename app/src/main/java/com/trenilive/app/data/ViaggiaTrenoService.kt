@@ -123,7 +123,7 @@ object ViaggiaTrenoService {
     }
 
     /**
-     * Rileva i giorni della settimana in cui il treno circola effettivamente interrogando i 7 giorni prossimi.
+     * Rileva i giorni della settimana in cui il treno circola effettivamente interrogando i 7 giorni prossimi a partire dalle 04:00 del mattino.
      */
     suspend fun detectRunningDaysForTrain(trainNumber: String): Set<Int> = withContext(Dispatchers.IO) {
         val cleanNum = trainNumber.trim()
@@ -148,6 +148,10 @@ object ViaggiaTrenoService {
                     val cal = Calendar.getInstance().apply {
                         timeInMillis = nowMs
                         add(Calendar.DAY_OF_YEAR, dayOffset)
+                        set(Calendar.HOUR_OF_DAY, 4) // Imposta le 04:00 del mattino per catturare tutte le partenze della giornata
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
                     }
                     val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
 
