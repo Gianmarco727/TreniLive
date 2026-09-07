@@ -373,14 +373,14 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        // CARD DI RICERCA UNIFICATA CON ANGOLI ARROTONDATI M3
+        // CARD DI RICERCA UNIFICATA CON COLORE UNIFORME E SENZA DOPPIO Sfondo
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
 
@@ -436,6 +436,10 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                             }
                         }
                     },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp)
                 )
@@ -510,6 +514,10 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                     },
                     placeholder = { Text("Stazione di Partenza") },
                     singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     trailingIcon = {
@@ -585,6 +593,10 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                     },
                     placeholder = { Text("Stazione di Destinazione") },
                     singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     trailingIcon = {
@@ -1724,7 +1736,8 @@ fun TrainStatusCard(
 
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
                                     text = "Discesa: ${alightingStop?.stationName ?: userAlightingStation}",
