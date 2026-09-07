@@ -466,7 +466,9 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
 
                 OutlinedTextField(
                     value = trainNumberInput,
-                    onValueChange = { trainNumberInput = it },
+                    onValueChange = { tfv ->
+                        trainNumberInput = tfv
+                    },
                     placeholder = { Text("Es. 9410, 16022, 16016") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
@@ -768,7 +770,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                             val searchingNum = trainNumberInput.trim()
                             if (searchingNum.isNotBlank() && favoritesManager.isFavorite(searchingNum)) {
                                 Spacer(modifier = Modifier.height(10.dp))
-                                Button(
+                                OutlinedButton(
                                     onClick = {
                                         favoritesManager.toggleFavorite(searchingNum)
                                         favoriteList = favoritesManager.getFavoriteTrains()
@@ -776,10 +778,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                                     },
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                     shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.error,
-                                        contentColor = Color.White
-                                    )
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD32F2F))
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -788,12 +787,12 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                                         Icon(
                                             imageVector = Icons.Outlined.Delete,
                                             contentDescription = null,
-                                            tint = Color.White,
+                                            tint = MaterialTheme.colorScheme.onErrorContainer,
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Text(
                                             text = "Rimuovi Treno $searchingNum dai Preferiti",
-                                            color = Color.White,
+                                            color = MaterialTheme.colorScheme.onErrorContainer,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold
                                         )
