@@ -41,6 +41,21 @@ class LiveTrainManager(context: Context) {
                     }
                 }
 
+                val monitoredList = mutableListOf<MonitoredStop>()
+                val stopsArray = obj.optJSONArray("monitoredStops")
+                if (stopsArray != null) {
+                    for (k in 0 until stopsArray.length()) {
+                        val sObj = stopsArray.getJSONObject(k)
+                        monitoredList.add(
+                            MonitoredStop(
+                                stationId = sObj.optString("stationId", ""),
+                                stationName = sObj.optString("stationName", ""),
+                                progressPercentage = sObj.optInt("progressPercentage", 0)
+                            )
+                        )
+                    }
+                }
+
                 if (num.isNotBlank()) {
                     list.add(
                         LiveTrainConfig(
@@ -51,7 +66,8 @@ class LiveTrainManager(context: Context) {
                             originStationName = originName,
                             destinationStationName = destName,
                             scheduledDepartureTime = time,
-                            isEnabled = isEnabled
+                            isEnabled = isEnabled,
+                            monitoredStops = monitoredList
                         )
                     )
                 }
@@ -105,6 +121,17 @@ class LiveTrainManager(context: Context) {
                 val daysArray = JSONArray()
                 item.daysOfWeek.forEach { daysArray.put(it) }
                 put("daysOfWeek", daysArray)
+
+                val stopsArray = JSONArray()
+                item.monitoredStops.forEach { stop ->
+                    val sObj = JSONObject().apply {
+                        put("stationId", stop.stationId)
+                        put("stationName", stop.stationName)
+                        put("progressPercentage", stop.progressPercentage)
+                    }
+                    stopsArray.put(sObj)
+                }
+                put("monitoredStops", stopsArray)
             }
             jsonArray.put(obj)
         }

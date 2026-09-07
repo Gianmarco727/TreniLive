@@ -2,6 +2,12 @@ package com.trenilive.app.data
 
 import java.util.Calendar
 
+data class MonitoredStop(
+    val stationId: String = "",
+    val stationName: String = "",
+    val progressPercentage: Int = 0
+)
+
 data class LiveTrainConfig(
     val id: String,
     val trainNumber: String,
@@ -10,7 +16,8 @@ data class LiveTrainConfig(
     val originStationName: String = "",
     val destinationStationName: String = "",
     val scheduledDepartureTime: String = "",
-    val isEnabled: Boolean = true
+    val isEnabled: Boolean = true,
+    val monitoredStops: List<MonitoredStop> = emptyList() // Fino a 4 fermate selezionate per i punti milestone sulla barra
 ) {
     fun isScheduledForDay(calendarDayOfWeek: Int): Boolean {
         return isEnabled && daysOfWeek.contains(calendarDayOfWeek)

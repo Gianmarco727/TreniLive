@@ -969,7 +969,33 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
     var isAdding by remember { mutableStateOf(false) }
     var addError by remember { mutableStateOf<String?>(null) }
 
+    // Gestione Selezione Fermate Monitorate
+    var selectedConfigForStops by remember { mutableStateOf<LiveTrainConfig?>(null) }
+
     val coroutineScope = rememberCoroutineScope()
+
+    // Dialog selezione fermate monitorate (fino a 4 fermate)
+    selectedConfigForStops?.let { config ->
+        MonitoredStopsSelectionDialog(
+            config = config,
+            onDismiss = { selectedConfigForStops = null },
+            onSave = { updatedStops ->
+                val updatedConfig = config.copy(monitoredStops = updatedStops)
+                liveTrains = liveManager.saveLiveTrain(updatedConfig)
+                selectedConfigForStops = null
+
+                // Invia refresh immediato alla notifica Live attiva
+                val refreshIntent = Intent(context, TrainTrackerForegroundService::class.java).apply {
+                    action = TrainTrackerForegroundService.ACTION_REFRESH_NOTIF
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(refreshIntent)
+                } else {
+                    context.startService(refreshIntent)
+                }
+            }
+        )
+    }
 
     // Gestione Permesso Notifiche Android 13+
     var hasNotificationPermission by remember {
@@ -1420,6 +1446,37 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                             )
                         }
 
+                        // Pulsante Opzionale Selezione Fermate Monitorate
+                        OutlinedButton(
+                            onClick = {
+                                selectedConfigForStops = config
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 10.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Place,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = if (config.monitoredStops.isEmpty()) {
+                                        "📍 Imposta Fermate sulla Barra (Opzionale)"
+                                    } else {
+                                        "📍 Fermate Monitorate (${config.monitoredStops.size}/4)"
+                                    },
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
                         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
                         Row(
@@ -1548,6 +1605,163 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+@Composable
+fun MonitoredStopsSelectionDialog(
+    config: LiveTrainConfig,
+    onDismiss: () -> Unit,
+    onSave: (List<MonitoredStop>) -> Unit
+) {
+    var isLoadingStops by remember { mutableStateOf(true) }
+    var stopsError by remember { mutableStateOf<String?>(null) }
+    var availableStops by remember { mutableStateOf<List<TrainStop>>(emptyList()) }
+    var tempSelectedStops by remember { mutableStateOf(config.monitoredStops) }
+
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(config) {
+        isLoadingStops = true
+        stopsError = null
+
+        coroutineScope.launch {
+            when (val resolveRes = ViaggiaTrenoService.resolveTrain(config.trainNumber)) {
+                is ViaggiaTrenoResult.Success -> {
+                    val (num, stationId, timestamp) = resolveRes.data
+                    when (val statusRes = ViaggiaTrenoService.fetchTrainStatus(num, stationId, timestamp)) {
+                        is ViaggiaTrenoResult.Success -> {
+                            availableStops = statusRes.data.stops
+                        }
+                        is ViaggiaTrenoResult.Error -> {
+                            stopsError = statusRes.message
+                        }
+                    }
+                }
+                is ViaggiaTrenoResult.Error -> {
+                    stopsError = resolveRes.message
+                }
+            }
+            isLoadingStops = false
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(
+                    text = "📍 Fermate Monitorate Treno ${config.trainNumber}",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Seleziona fino a 4 fermate della tratta da mostrare come quadratini sulla notifica.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        },
+        text = {
+            if (isLoadingStops) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(150.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else if (stopsError != null) {
+                Text(
+                    text = stopsError ?: "Errore caricamento fermate",
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 13.sp
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 300.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    val totalCount = availableStops.size
+                    availableStops.forEachIndexed { idx, stop ->
+                        val isChecked = tempSelectedStops.any { it.stationId == stop.stationId }
+                        val isMaxReached = tempSelectedStops.size >= 4 && !isChecked
+
+                        val progressPct = when {
+                            totalCount <= 1 -> 0
+                            else -> ((idx.toFloat() / (totalCount - 1).toFloat()) * 100).toInt().coerceIn(0, 100)
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = !isMaxReached || isChecked) {
+                                    tempSelectedStops = if (isChecked) {
+                                        tempSelectedStops.filterNot { it.stationId == stop.stationId }
+                                    } else {
+                                        tempSelectedStops + MonitoredStop(
+                                            stationId = stop.stationId,
+                                            stationName = stop.stationName,
+                                            progressPercentage = progressPct
+                                        )
+                                    }
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isChecked,
+                                enabled = !isMaxReached || isChecked,
+                                onCheckedChange = { checked ->
+                                    tempSelectedStops = if (!checked) {
+                                        tempSelectedStops.filterNot { it.stationId == stop.stationId }
+                                    } else {
+                                        tempSelectedStops + MonitoredStop(
+                                            stationId = stop.stationId,
+                                            stationName = stop.stationName,
+                                            progressPercentage = progressPct
+                                        )
+                                    }
+                                }
+                            )
+
+                            Column(modifier = Modifier.padding(start = 8.dp)) {
+                                Text(
+                                    text = stop.stationName,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isMaxReached) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Posizione nel percorso: $progressPct%",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        HorizontalDivider()
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onSave(tempSelectedStops)
+                },
+                enabled = !isLoadingStops && stopsError == null,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E))
+            ) {
+                Text("Salva Fermate (${tempSelectedStops.size}/4)", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Annulla")
+            }
+        }
+    )
 }
 
 @Composable

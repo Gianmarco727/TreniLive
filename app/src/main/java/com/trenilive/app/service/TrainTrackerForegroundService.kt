@@ -351,7 +351,6 @@ class TrainTrackerForegroundService : Service() {
                 )
 
             // Se l'opzione MediaSession Bypass è stata attivata dalle Opzioni Sviluppatore:
-            // imposta MediaStyle E NON SOVRASCRIVERLO DOPO!
             if (nativeMediaSession != null) {
                 nativeMediaSession?.sessionToken?.let { token ->
                     val mediaStyle = Notification.MediaStyle().setMediaSession(token)
@@ -367,7 +366,7 @@ class TrainTrackerForegroundService : Service() {
                         val setProgressMethod = progressStyleClass.getMethod("setProgress", Int::class.javaPrimitiveType)
                         setProgressMethod.invoke(progressStyle, progress)
 
-                        // 2. Imposta l'icona del treno 3 monocromatica bianca specchiata (ic_progress_train3) con scala 0.25 sulla punta della progress bar
+                        // 2. Imposta l'icona del treno 3 monocromatica bianca specchiata (ic_progress_train3)
                         try {
                             val trainIcon = Icon.createWithResource(this, R.drawable.ic_progress_train3)
                             val setTrackerIconMethod = progressStyleClass.methods.firstOrNull {
@@ -376,6 +375,42 @@ class TrainTrackerForegroundService : Service() {
                             setTrackerIconMethod?.invoke(progressStyle, trainIcon)
                         } catch (e: Throwable) {
                             e.printStackTrace()
+                        }
+
+                        // 3. Imposta fino a 4 punti milestone (quadratini) per le fermate monitorate
+                        val liveManager = LiveTrainManager(this)
+                        val activeConfig = liveManager.getLiveTrains().firstOrNull { it.trainNumber == activeTrainNumber }
+                        val monitoredStops = activeConfig?.monitoredStops ?: emptyList()
+
+                        if (monitoredStops.isNotEmpty()) {
+                            try {
+                                val pointClass = Class.forName("android.app.Notification\$ProgressStyle\$Point")
+                                val pointsList = ArrayList<Any>()
+
+                                for (stop in monitoredStops.take(4)) {
+                                    val pct = stop.progressPercentage.coerceIn(0, 100)
+                                    val pointObj = try {
+                                        val pointConstructor = pointClass.getDeclaredConstructor(Int::class.javaPrimitiveType)
+                                        pointConstructor.newInstance(pct)
+                                    } catch (e: Throwable) {
+                                        val pointConstructor = pointClass.getDeclaredConstructor()
+                                        val pt = pointConstructor.newInstance()
+                                        val setPosMethod = pointClass.methods.firstOrNull { it.name == "setPosition" || it.name == "setProgress" }
+                                        setPosMethod?.invoke(pt, pct)
+                                        pt
+                                    }
+                                    pointsList.add(pointObj)
+                                }
+
+                                if (pointsList.isNotEmpty()) {
+                                    val setPointsMethod = progressStyleClass.methods.firstOrNull {
+                                        it.name == "setProgressPoints" || it.name == "setPoints"
+                                    }
+                                    setPointsMethod?.invoke(progressStyle, pointsList)
+                                }
+                            } catch (e: Throwable) {
+                                e.printStackTrace()
+                            }
                         }
 
                         val setStyleMethod = builder.javaClass.getMethod("setStyle", Class.forName("android.app.Notification\$Style"))
