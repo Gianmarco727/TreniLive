@@ -1211,18 +1211,12 @@ private suspend fun programTrainInLiveTracker(
 
     liveManager.saveLiveTrain(newConfig)
 
-    val todayDayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
-    if (newConfig.isScheduledForDay(todayDayOfWeek)) {
-        TrainTrackerForegroundService.startService(
-            context = context,
-            trainNumber = newConfig.trainNumber,
-            stationId = newConfig.originStationId
-        )
-    }
+    // Pianificazione intelligente dell'allarme invece di avviare prematuramente la notifica se la partenza è futura
+    LiveTrainScheduler.scheduleAlarmsAndCheckActiveTrains(context)
 
     Toast.makeText(
         context,
-        "Treno ${departure.trainNumber} salvato nel Live Tracker con le tue fermate!",
+        "Treno ${departure.trainNumber} programmato nel Live Tracker!",
         Toast.LENGTH_LONG
     ).show()
 
@@ -1311,15 +1305,7 @@ fun LiveTrackerScreen(
                 liveTrains = liveManager.saveLiveTrain(updatedConfig)
                 selectedConfigForDays = null
 
-                // Invia refresh o aggiorna stato del servizio
-                val todayDayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
-                if (updatedConfig.isScheduledForDay(todayDayOfWeek)) {
-                    TrainTrackerForegroundService.startService(
-                        context = context,
-                        trainNumber = updatedConfig.trainNumber,
-                        stationId = updatedConfig.originStationId
-                    )
-                }
+                LiveTrainScheduler.scheduleAlarmsAndCheckActiveTrains(context)
             }
         )
     }
@@ -1346,8 +1332,8 @@ fun LiveTrackerScreen(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        // Avvia il tracciamento automatico per i treni programmati per la giornata odierna
-        LiveTrainScheduler.checkAndStartScheduledTrains(context)
+        // Pianifica gli allarmi esatti ed avvia il tracciamento solo per treni attivi ora
+        LiveTrainScheduler.scheduleAlarmsAndCheckActiveTrains(context)
     }
 
     val openSystemPromotedSettings = {
@@ -1402,22 +1388,14 @@ fun LiveTrackerScreen(
                                     originStationId = stationId,
                                     originStationName = status.originStationName,
                                     destinationStationName = status.destinationStationName,
-                                    scheduledDepartureTime = "",
+                                    scheduledDepartureTime = status.stops.firstOrNull()?.scheduledTimeMs?.let { formatTime(it) } ?: "",
                                     isEnabled = true
                                 )
                                 liveTrains = liveManager.saveLiveTrain(newConfig)
                                 inputTrainNumber = ""
                                 addError = null
 
-                                // Se il treno è programmato per oggi, avvia SUBITO il tracciamento
-                                val todayDayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
-                                if (newConfig.isScheduledForDay(todayDayOfWeek)) {
-                                    TrainTrackerForegroundService.startService(
-                                        context = context,
-                                        trainNumber = newConfig.trainNumber,
-                                        stationId = newConfig.originStationId
-                                    )
-                                }
+                                LiveTrainScheduler.scheduleAlarmsAndCheckActiveTrains(context)
                             }
                             is ViaggiaTrenoResult.Error -> {
                                 addError = statusRes.message
@@ -1811,16 +1789,8 @@ fun LiveTrackerScreen(
                                 checked = config.isEnabled,
                                 onCheckedChange = { isChecked ->
                                     liveTrains = liveManager.toggleTrainEnabled(config.id)
-                                    if (isChecked) {
-                                        val todayDayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
-                                        if (config.isScheduledForDay(todayDayOfWeek)) {
-                                            TrainTrackerForegroundService.startService(
-                                                context = context,
-                                                trainNumber = config.trainNumber,
-                                                stationId = config.originStationId
-                                            )
-                                        }
-                                    } else {
+                                    LiveTrainScheduler.scheduleAlarmsAndCheckActiveTrains(context)
+                                    if (!isChecked) {
                                         TrainTrackerForegroundService.stopService(context, config.trainNumber)
                                     }
                                 }
@@ -2620,13 +2590,7 @@ fun TrainStatusCard(
                         )
                         liveManager.saveLiveTrain(newConfig)
 
-                        val todayDayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
-                        if (newConfig.isScheduledForDay(todayDayOfWeek)) {
-                            TrainTrackerForegroundService.startService(
-                                context = context,
-                                trainNumber = newConfig.trainNumber
-                            )
-                        }
+                        LiveTrainScheduler.scheduleAlarmsAndCheckActiveTrains(context)
 
                         Toast.makeText(
                             context,
