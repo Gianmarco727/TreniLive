@@ -358,7 +358,7 @@ object ViaggiaTrenoService {
         }
 
     /**
-     * Verifica se un treno viaggia nella DIREZIONE CORRETTA E che sia un treno VALIDO (non nel passato o già giunto a destinazione).
+     * Verifica se un treno viaggia nella DIREZIONE CORRETTA E che sia un treno VALIDO.
      */
     private suspend fun isTrainInCorrectDirection(
         trainNumber: String,
@@ -370,18 +370,27 @@ object ViaggiaTrenoService {
     ): Boolean {
         var status: TrainStatus? = null
 
-        // 1. Risolve il percorso ufficiale del treno
-        val resolveRes = resolveTrain(trainNumber)
-        if (resolveRes is ViaggiaTrenoResult.Success) {
-            val (num, depId, ts) = resolveRes.data
-            val statusRes = fetchTrainStatus(num, depId, ts)
-            if (statusRes is ViaggiaTrenoResult.Success) {
-                status = statusRes.data
-            }
-        }
+        val isSearchDateToday = isSameDay(searchDate, Date())
 
-        if (status == null && departureTimestampMs > 0) {
-            val statusRes = fetchTrainStatus(trainNumber, originStationId, departureTimestampMs.toString())
+        if (isSearchDateToday) {
+            // Per ricerche odierne, recupera lo stato in tempo reale di oggi
+            val resolveRes = resolveTrain(trainNumber)
+            if (resolveRes is ViaggiaTrenoResult.Success) {
+                val (num, depId, ts) = resolveRes.data
+                val statusRes = fetchTrainStatus(num, depId, ts)
+                if (statusRes is ViaggiaTrenoResult.Success) {
+                    status = statusRes.data
+                }
+            }
+            if (status == null && departureTimestampMs > 0) {
+                val statusRes = fetchTrainStatus(trainNumber, originStationId, departureTimestampMs.toString())
+                if (statusRes is ViaggiaTrenoResult.Success) {
+                    status = statusRes.data
+                }
+            }
+        } else {
+            // Per ricerche in date future, recupera la fermata/tratta programmata del treno
+            val statusRes = fetchTrainStatusForDeparture(trainNumber, originStationId, departureTimestampMs)
             if (statusRes is ViaggiaTrenoResult.Success) {
                 status = statusRes.data
             }
@@ -417,26 +426,24 @@ object ViaggiaTrenoService {
         val boardingStop = stops[originIdx]
         val alightingStop = stops[destIdx]
 
-        // 2. Filtra treni già giunti a destinazione finale o soppressi
-        if (trainStatus.isCancelled || trainStatus.progressPercentage >= 100) {
-            return false
-        }
+        // 2. Se la ricerca è per OGGI, controlla che il treno non sia soppresso, non abbia già completato il percorso o non abbia già superato le stazioni
+        if (isSearchDateToday) {
+            if (trainStatus.isCancelled || trainStatus.progressPercentage >= 100) {
+                return false
+            }
 
-        // 3. Filtra treni che hanno già superato la stazione di salita o discesa dell'utente
-        if (boardingStop.isPassed || alightingStop.isPassed) {
-            return false
-        }
+            if (boardingStop.isPassed || alightingStop.isPassed) {
+                return false
+            }
 
-        // 4. Per ricerche odierne, verifica che l'orario di partenza dalla stazione di salita non sia già passato
-        val boardingDepartureTimeMs = boardingStop.actualOrEstimatedTimeMs
-            ?: boardingStop.scheduledTimeMs
-            ?: departureTimestampMs
+            val boardingDepartureTimeMs = boardingStop.actualOrEstimatedTimeMs
+                ?: boardingStop.scheduledTimeMs
+                ?: departureTimestampMs
 
-        val isSearchDateToday = isSameDay(searchDate, Date())
-        val searchCutoffTimeMs = searchDate.time - 5 * 60 * 1000L // 5 minuti di tolleranza
-
-        if (isSearchDateToday && boardingDepartureTimeMs < searchCutoffTimeMs) {
-            return false
+            val searchCutoffTimeMs = searchDate.time - 5 * 60 * 1000L // 5 minuti di tolleranza
+            if (boardingDepartureTimeMs < searchCutoffTimeMs) {
+                return false
+            }
         }
 
         return true
