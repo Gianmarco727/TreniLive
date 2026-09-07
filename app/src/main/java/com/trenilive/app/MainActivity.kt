@@ -1381,6 +1381,7 @@ fun LiveTrackerScreen(
             coroutineScope.launch {
                 // Rileva automaticamente i giorni della settimana in cui il treno circola
                 val detectedDays = ViaggiaTrenoService.detectRunningDaysForTrain(cleanNum)
+                selectedDays = detectedDays // Sincronizza i selettori a schermo con i giorni rilevati!
 
                 when (val resolveRes = ViaggiaTrenoService.resolveTrain(cleanNum)) {
                     is ViaggiaTrenoResult.Success -> {
