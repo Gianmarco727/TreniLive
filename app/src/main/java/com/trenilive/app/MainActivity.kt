@@ -879,9 +879,9 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                         },
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (isCurrentlySelected) Color(0xFFFFF0F2) else MaterialTheme.colorScheme.surface
+                        containerColor = if (isCurrentlySelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
                     ),
-                    border = if (isCurrentlySelected) androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFC8102E)) else null,
+                    border = if (isCurrentlySelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Row(
@@ -896,7 +896,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                                 text = "${departure.category} ${departure.trainNumber}",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
-                                color = if (isCurrentlySelected) Color(0xFFC8102E) else MaterialTheme.colorScheme.onSurface
+                                color = if (isCurrentlySelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                             )
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
