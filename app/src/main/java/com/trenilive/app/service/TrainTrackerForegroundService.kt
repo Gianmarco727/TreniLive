@@ -30,6 +30,7 @@ class TrainTrackerForegroundService : Service() {
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
 
+    private val activeTrackedTrains = Collections.synchronizedSet(mutableSetOf<String>())
     private var activeTrainNumber: String? = null
     private var activeStationId: String? = null
     private var activeTimestamp: String? = null
@@ -97,7 +98,12 @@ class TrainTrackerForegroundService : Service() {
 
         when (action) {
             ACTION_STOP_TRACKING -> {
-                stopTracking()
+                val targetTrain = intent?.getStringExtra(EXTRA_TRAIN_NUMBER) ?: activeTrainNumber
+                if (!targetTrain.isNullOrBlank()) {
+                    stopTrackingForTrain(targetTrain)
+                } else {
+                    stopAllTracking()
+                }
             }
             ACTION_REFRESH_NOTIF -> {
                 ensureMediaSessionState(0)
@@ -117,6 +123,7 @@ class TrainTrackerForegroundService : Service() {
                     activeTrainNumber = trainNumber
                     activeStationId = stationId
                     activeTimestamp = timestamp
+                    activeTrackedTrains.add(trainNumber)
 
                     if (isTracking) {
                         serviceScope.launch {
@@ -141,6 +148,7 @@ class TrainTrackerForegroundService : Service() {
     private fun startTracking() {
         val trainNumber = activeTrainNumber ?: return
         isTracking = true
+        activeTrackedTrains.add(trainNumber)
 
         ensureMediaSessionState(0)
 
@@ -213,7 +221,7 @@ class TrainTrackerForegroundService : Service() {
 
                 if (status.progressPercentage >= 100 || status.isCancelled) {
                     delay(30_000)
-                    stopTracking()
+                    stopTrackingForTrain(trainNumber)
                 }
             }
             is ViaggiaTrenoResult.Error -> {
@@ -318,10 +326,11 @@ class TrainTrackerForegroundService : Service() {
 
         val stopIntent = Intent(this, TrainTrackerForegroundService::class.java).apply {
             action = ACTION_STOP_TRACKING
+            putExtra(EXTRA_TRAIN_NUMBER, activeTrainNumber)
         }
         val stopPendingIntent = PendingIntent.getService(
             this,
-            1,
+            getNotificationIdForTrain(activeTrainNumber),
             stopIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -524,8 +533,23 @@ class TrainTrackerForegroundService : Service() {
         }
     }
 
-    private fun stopTracking() {
+    private fun stopTrackingForTrain(trainNum: String) {
+        activeTrackedTrains.remove(trainNum)
+        val notifId = getNotificationIdForTrain(trainNum)
+        try {
+            NotificationManagerCompat.from(this).cancel(notifId)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        if (activeTrackedTrains.isEmpty()) {
+            stopAllTracking()
+        }
+    }
+
+    private fun stopAllTracking() {
         isTracking = false
+        activeTrackedTrains.clear()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             try {
                 nativeMediaSession?.isActive = false
@@ -535,9 +559,7 @@ class TrainTrackerForegroundService : Service() {
                 e.printStackTrace()
             }
         }
-        val notifId = getNotificationIdForTrain(activeTrainNumber)
         stopForeground(STOP_FOREGROUND_REMOVE)
-        NotificationManagerCompat.from(this).cancel(notifId)
         stopSelf()
     }
 
@@ -605,9 +627,10 @@ class TrainTrackerForegroundService : Service() {
             }
         }
 
-        fun stopService(context: Context) {
+        fun stopService(context: Context, trainNumber: String? = null) {
             val intent = Intent(context, TrainTrackerForegroundService::class.java).apply {
                 action = ACTION_STOP_TRACKING
+                putExtra(EXTRA_TRAIN_NUMBER, trainNumber)
             }
             context.startService(intent)
         }

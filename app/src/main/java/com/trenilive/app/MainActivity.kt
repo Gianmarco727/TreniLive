@@ -116,7 +116,7 @@ fun MainTabScreen(modifier: Modifier = Modifier) {
             )
         }
 
-        // Mantiene sia TrainTrackerScreen che LiveTrackerScreen attivi in memoria
+        // Mantiene sia TrainTrackerScreen che LiveTrackerScreen sempre attivi in memoria per preservare lo stato
         Box(modifier = Modifier.fillMaxSize()) {
             androidx.compose.animation.AnimatedVisibility(
                 visible = selectedTab == 0,
@@ -150,20 +150,20 @@ fun TrainTrackerScreen(
     var favoriteList by remember { mutableStateOf(favoritesManager.getFavoriteTrains()) }
     var recentSearches by remember { mutableStateOf(recentSearchesManager.getRecentSearches()) }
 
-    var trainNumberInput by remember { mutableStateOf("") }
+    var trainNumberInput by rememberSaveable { mutableStateOf("") }
     var favoriteToRemove by remember { mutableStateOf<String?>(null) }
 
-    // Campi stazioni per la ricerca gestiti con TextFieldValue per controllo del cursore
-    var originQuery by remember { mutableStateOf(TextFieldValue("")) }
+    // Campi stazioni per la ricerca gestiti con TextFieldValue e Saver per preservare lo stato tra schede
+    var originQuery by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     var selectedOriginStation by remember { mutableStateOf<StationInfo?>(null) }
     var originSuggestions by remember { mutableStateOf<List<StationInfo>>(emptyList()) }
 
-    var destinationQuery by remember { mutableStateOf(TextFieldValue("")) }
+    var destinationQuery by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     var selectedDestinationStation by remember { mutableStateOf<StationInfo?>(null) }
     var destinationSuggestions by remember { mutableStateOf<List<StationInfo>>(emptyList()) }
 
     // Data e Ora selezionate (in millisecondi)
-    var selectedDateMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var selectedDateMs by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
 
     // Stati di caricamento e risultati
     var isLoading by remember { mutableStateOf(false) }
@@ -171,10 +171,10 @@ fun TrainTrackerScreen(
     var trainStatus by remember { mutableStateOf<TrainStatus?>(null) }
     var stationSolutions by remember { mutableStateOf<List<StationDeparture>>(emptyList()) }
 
-    // Stato per la card soluzione attualmente espansa
+    // Caching e stato per la card soluzione attualmente espansa
     var expandedTrainNumber by remember { mutableStateOf<String?>(null) }
     var expandedTrainLoading by remember { mutableStateOf(false) }
-    var expandedTrainStatus by remember { mutableStateOf<TrainStatus?>(null) }
+    var expandedTrainStatuses by remember { mutableStateOf(mapOf<String, TrainStatus>()) }
 
     val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
@@ -249,28 +249,29 @@ fun TrainTrackerScreen(
         }
     }
 
-    // Funzione espansione inline per una soluzione senza ricaricare la pagina
+    // Funzione espansione inline per una soluzione con cache fluida
     val toggleDepartureExpansion = { dep: StationDeparture ->
         if (expandedTrainNumber == dep.trainNumber) {
             expandedTrainNumber = null
-            expandedTrainStatus = null
         } else {
             expandedTrainNumber = dep.trainNumber
-            expandedTrainLoading = true
-            expandedTrainStatus = null
 
-            coroutineScope.launch {
-                when (val statusRes = ViaggiaTrenoService.fetchTrainStatusForDeparture(
-                    trainNumber = dep.trainNumber,
-                    departureStationId = dep.originStationId,
-                    departureTimestampMs = dep.departureTimestampMs
-                )) {
-                    is ViaggiaTrenoResult.Success -> {
-                        expandedTrainStatus = statusRes.data
+            if (!expandedTrainStatuses.containsKey(dep.trainNumber)) {
+                expandedTrainLoading = true
+
+                coroutineScope.launch {
+                    when (val statusRes = ViaggiaTrenoService.fetchTrainStatusForDeparture(
+                        trainNumber = dep.trainNumber,
+                        departureStationId = dep.originStationId,
+                        departureTimestampMs = dep.departureTimestampMs
+                    )) {
+                        is ViaggiaTrenoResult.Success -> {
+                            expandedTrainStatuses = expandedTrainStatuses + (dep.trainNumber to statusRes.data)
+                        }
+                        is ViaggiaTrenoResult.Error -> {}
                     }
-                    is ViaggiaTrenoResult.Error -> {}
+                    expandedTrainLoading = false
                 }
-                expandedTrainLoading = false
             }
         }
     }
@@ -951,7 +952,7 @@ fun TrainTrackerScreen(
             }
         }
 
-        // LISTA SOLUZIONI TROVATE (CON ESPANSIONE INLINE FLUIDA SENZA RICARICARE LA PAGINA)
+        // LISTA SOLUZIONI TROVATE (CON ESPANSIONE INLINE FLUIDA E CACHING SENZA RICARICARE LA PAGINA)
         if (stationSolutions.isNotEmpty() && !isLoading) {
             Spacer(modifier = Modifier.height(20.dp))
             Text(
@@ -1028,7 +1029,7 @@ fun TrainTrackerScreen(
                             }
                         }
 
-                        // ESPANSIONE INLINE FLUIDA DELLA CARD SELEZIONATA (SENZA RICARICARE L'INTERA PAGINA)
+                        // ESPANSIONE INLINE FLUIDA DELLA CARD SELEZIONATA CON CACHING
                         AnimatedVisibility(
                             visible = isExpanded,
                             enter = fadeIn(),
@@ -1037,29 +1038,29 @@ fun TrainTrackerScreen(
                             Column(modifier = Modifier.padding(top = 12.dp)) {
                                 HorizontalDivider(modifier = Modifier.padding(bottom = 12.dp))
 
-                                if (expandedTrainLoading) {
+                                val cachedStatus = expandedTrainStatuses[departure.trainNumber]
+
+                                if (cachedStatus != null) {
+                                    Text(
+                                        text = "Ultimo rilevamento: ${cachedStatus.lastDetectedStation}",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    cachedStatus.nextStop?.let { next ->
+                                        Text(
+                                            text = "Prossima fermata: ${next.stationName} (${formatTime(next.actualOrEstimatedTimeMs)})",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+                                    }
+                                } else if (expandedTrainLoading) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth().padding(8.dp),
                                         horizontalArrangement = Arrangement.Center
                                     ) {
                                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                    }
-                                } else {
-                                    expandedTrainStatus?.let { status ->
-                                        Text(
-                                            text = "Ultimo rilevamento: ${status.lastDetectedStation}",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        status.nextStop?.let { next ->
-                                            Text(
-                                                text = "Prossima fermata: ${next.stationName} (${formatTime(next.actualOrEstimatedTimeMs)})",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(top = 2.dp)
-                                            )
-                                        }
                                     }
                                 }
 
@@ -1795,7 +1796,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                                             )
                                         }
                                     } else {
-                                        TrainTrackerForegroundService.stopService(context)
+                                        TrainTrackerForegroundService.stopService(context, config.trainNumber)
                                     }
                                 }
                             )
@@ -1865,7 +1866,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
 
                             TextButton(onClick = {
                                 liveTrains = liveManager.removeLiveTrain(config.id)
-                                TrainTrackerForegroundService.stopService(context)
+                                TrainTrackerForegroundService.stopService(context, config.trainNumber)
                             }) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
