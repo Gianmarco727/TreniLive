@@ -142,7 +142,7 @@ fun MainTabScreen(modifier: Modifier = Modifier) {
                         alpha = if (selectedTab == 1) 1f else 0f
                     }
             ) {
-                LiveTrackerScreen()
+                LiveTrackerScreen(isVisible = selectedTab == 1)
             }
         }
     }
@@ -1230,7 +1230,10 @@ private suspend fun programTrainInLiveTracker(
 }
 
 @Composable
-fun LiveTrackerScreen(modifier: Modifier = Modifier) {
+fun LiveTrackerScreen(
+    modifier: Modifier = Modifier,
+    isVisible: Boolean = true
+) {
     val context = LocalContext.current
     val liveManager = remember { LiveTrainManager(context) }
     val favoritesManager = remember { FavoritesManager(context) }
@@ -1267,6 +1270,13 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
     var isSamsungHintDismissed by remember { mutableStateOf(liveManager.isSamsungHintDismissed()) }
 
     val coroutineScope = rememberCoroutineScope()
+
+    // Ricarica automaticamente la lista dei treni programmati ogni volta che la schermata diventa visibile
+    LaunchedEffect(isVisible) {
+        if (isVisible) {
+            liveTrains = liveManager.getLiveTrains()
+        }
+    }
 
     // Dialog selezione fermate monitorate (fino a 4 fermate)
     selectedConfigForStops?.let { config ->
