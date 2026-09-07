@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -75,7 +76,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainTabScreen(modifier: Modifier = Modifier) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
 
     Column(modifier = modifier.fillMaxSize()) {
         PrimaryTabRow(selectedTabIndex = selectedTab) {
@@ -115,9 +116,23 @@ fun MainTabScreen(modifier: Modifier = Modifier) {
             )
         }
 
-        when (selectedTab) {
-            0 -> TrainTrackerScreen(onSwitchToLiveTracker = { selectedTab = 1 })
-            1 -> LiveTrackerScreen()
+        // Mantiene sia TrainTrackerScreen che LiveTrackerScreen attivi in memoria
+        Box(modifier = Modifier.fillMaxSize()) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = selectedTab == 0,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                TrainTrackerScreen(onSwitchToLiveTracker = { selectedTab = 1 })
+            }
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = selectedTab == 1,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                LiveTrackerScreen()
+            }
         }
     }
 }
@@ -130,7 +145,10 @@ fun TrainTrackerScreen(
 ) {
     val context = LocalContext.current
     val favoritesManager = remember { FavoritesManager(context) }
+    val recentSearchesManager = remember { RecentSearchesManager(context) }
+
     var favoriteList by remember { mutableStateOf(favoritesManager.getFavoriteTrains()) }
+    var recentSearches by remember { mutableStateOf(recentSearchesManager.getRecentSearches()) }
 
     var trainNumberInput by remember { mutableStateOf("") }
     var favoriteToRemove by remember { mutableStateOf<String?>(null) }
@@ -153,13 +171,18 @@ fun TrainTrackerScreen(
     var trainStatus by remember { mutableStateOf<TrainStatus?>(null) }
     var stationSolutions by remember { mutableStateOf<List<StationDeparture>>(emptyList()) }
 
+    // Stato per la card soluzione attualmente espansa
+    var expandedTrainNumber by remember { mutableStateOf<String?>(null) }
+    var expandedTrainLoading by remember { mutableStateOf(false) }
+    var expandedTrainStatus by remember { mutableStateOf<TrainStatus?>(null) }
+
     val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
 
     var previousSuggestionsCount by remember { mutableIntStateOf(0) }
 
-    // Quando compaiono i suggerimenti, effettua un piccolo scroll controllato dell'altezza di 1 suggerimento (~140px)
+    // Quando compaiono i suggerimenti, effettua un piccolo scroll controllato
     LaunchedEffect(originSuggestions, destinationSuggestions) {
         val currentCount = originSuggestions.size + destinationSuggestions.size
         if (currentCount > 0 && previousSuggestionsCount == 0) {
@@ -226,26 +249,29 @@ fun TrainTrackerScreen(
         }
     }
 
-    // Funzione ricerca dettagli per una specifica partenza trovata nella lista
-    val searchByDeparture = { dep: StationDeparture ->
-        focusManager.clearFocus()
-        errorMessage = null
-        isLoading = true
+    // Funzione espansione inline per una soluzione senza ricaricare la pagina
+    val toggleDepartureExpansion = { dep: StationDeparture ->
+        if (expandedTrainNumber == dep.trainNumber) {
+            expandedTrainNumber = null
+            expandedTrainStatus = null
+        } else {
+            expandedTrainNumber = dep.trainNumber
+            expandedTrainLoading = true
+            expandedTrainStatus = null
 
-        coroutineScope.launch {
-            when (val statusRes = ViaggiaTrenoService.fetchTrainStatusForDeparture(
-                trainNumber = dep.trainNumber,
-                departureStationId = dep.originStationId,
-                departureTimestampMs = dep.departureTimestampMs
-            )) {
-                is ViaggiaTrenoResult.Success -> {
-                    trainStatus = statusRes.data
+            coroutineScope.launch {
+                when (val statusRes = ViaggiaTrenoService.fetchTrainStatusForDeparture(
+                    trainNumber = dep.trainNumber,
+                    departureStationId = dep.originStationId,
+                    departureTimestampMs = dep.departureTimestampMs
+                )) {
+                    is ViaggiaTrenoResult.Success -> {
+                        expandedTrainStatus = statusRes.data
+                    }
+                    is ViaggiaTrenoResult.Error -> {}
                 }
-                is ViaggiaTrenoResult.Error -> {
-                    errorMessage = statusRes.message
-                }
+                expandedTrainLoading = false
             }
-            isLoading = false
         }
     }
 
@@ -264,8 +290,13 @@ fun TrainTrackerScreen(
             isLoading = true
             trainStatus = null
             stationSolutions = emptyList()
+            expandedTrainNumber = null
 
             coroutineScope.launch {
+                // Aggiungi la ricerca tra le ricerche recenti
+                recentSearchesManager.addRecentSearch(originName, destName)
+                recentSearches = recentSearchesManager.getRecentSearches()
+
                 var originStation = selectedOriginStation
                 if (originStation == null) {
                     when (val autoRes = ViaggiaTrenoService.autocompleteStation(originName)) {
@@ -389,7 +420,7 @@ fun TrainTrackerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(bottom = 16.dp),
+                    .padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 favoriteList.forEach { favNum ->
@@ -429,7 +460,67 @@ fun TrainTrackerScreen(
             }
         }
 
-        // CARD DI RICERCA UNIFICATA CON LO STESSO GRIGIO ESATTO DEL LIVE TRACKER
+        // BARRA RICERCHE RECENTI (Massimo 5 tratte recenti)
+        if (recentSearches.isNotEmpty()) {
+            Text(
+                text = "RICERCHE RECENTI",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 0.5.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                recentSearches.forEach { search ->
+                    SuggestionChip(
+                        onClick = {
+                            originQuery = TextFieldValue(
+                                text = search.originName,
+                                selection = TextRange(search.originName.length)
+                            )
+                            destinationQuery = TextFieldValue(
+                                text = search.destinationName,
+                                selection = TextRange(search.destinationName.length)
+                            )
+                            selectedOriginStation = null
+                            selectedDestinationStation = null
+                            selectedDateMs = System.currentTimeMillis() // Imposta data ed ora attuali
+                            searchByStations()
+                        },
+                        label = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.History,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "${search.originName} ➔ ${search.destinationName}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        },
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                        )
+                    )
+                }
+            }
+        }
+
+        // CARD DI RICERCA UNIFICATA
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
@@ -610,7 +701,6 @@ fun TrainTrackerScreen(
                                         .fillMaxWidth()
                                         .clickable {
                                             selectedOriginStation = station
-                                            // Posiziona esplicitamente il cursore alla FINE del testo selezionato
                                             originQuery = TextFieldValue(
                                                 text = station.name,
                                                 selection = TextRange(station.name.length)
@@ -689,7 +779,6 @@ fun TrainTrackerScreen(
                                         .fillMaxWidth()
                                         .clickable {
                                             selectedDestinationStation = station
-                                            // Posiziona esplicitamente il cursore alla FINE del testo selezionato
                                             destinationQuery = TextFieldValue(
                                                 text = station.name,
                                                 selection = TextRange(station.name.length)
@@ -837,7 +926,7 @@ fun TrainTrackerScreen(
             }
         }
 
-        // SCHEDA DETTAGLIO TRENO SELEZIONATO IN TEMPO REALE
+        // SCHEDA DETTAGLIO TRENO SELEZIONATO IN TEMPO REALE (PER RICERCA NUMERO TRENO)
         AnimatedVisibility(
             visible = trainStatus != null && !isLoading,
             enter = fadeIn(),
@@ -856,12 +945,13 @@ fun TrainTrackerScreen(
                         trainStatus = null
                     },
                     userBoardingStation = originQuery.text,
-                    userAlightingStation = destinationQuery.text
+                    userAlightingStation = destinationQuery.text,
+                    onSwitchToLiveTracker = onSwitchToLiveTracker
                 )
             }
         }
 
-        // LISTA SOLUZIONI TROVATE
+        // LISTA SOLUZIONI TROVATE (CON ESPANSIONE INLINE FLUIDA SENZA RICARICARE LA PAGINA)
         if (stationSolutions.isNotEmpty() && !isLoading) {
             Spacer(modifier = Modifier.height(20.dp))
             Text(
@@ -873,20 +963,20 @@ fun TrainTrackerScreen(
             )
 
             stationSolutions.forEach { departure ->
-                val isCurrentlySelected = trainStatus?.trainNumber == departure.trainNumber
+                val isExpanded = expandedTrainNumber == departure.trainNumber
 
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 12.dp)
                         .clickable {
-                            searchByDeparture(departure)
+                            toggleDepartureExpansion(departure)
                         },
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (isCurrentlySelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
+                        containerColor = if (isExpanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
                     ),
-                    border = if (isCurrentlySelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                    border = if (isExpanded) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -900,7 +990,7 @@ fun TrainTrackerScreen(
                                     text = "${departure.category} ${departure.trainNumber}",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 16.sp,
-                                    color = if (isCurrentlySelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    color = if (isExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                 )
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -938,47 +1028,81 @@ fun TrainTrackerScreen(
                             }
                         }
 
-                        // Mostra il pulsante "Programma nel Live Tracker" SOLO nella soluzione selezionata/aperta
-                        if (isCurrentlySelected) {
-                            Spacer(modifier = Modifier.height(12.dp))
+                        // ESPANSIONE INLINE FLUIDA DELLA CARD SELEZIONATA (SENZA RICARICARE L'INTERA PAGINA)
+                        AnimatedVisibility(
+                            visible = isExpanded,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Column(modifier = Modifier.padding(top = 12.dp)) {
+                                HorizontalDivider(modifier = Modifier.padding(bottom = 12.dp))
 
-                            Button(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        programTrainInLiveTracker(
-                                            departure = departure,
-                                            originQueryText = originQuery.text,
-                                            destinationQueryText = destinationQuery.text,
-                                            context = context,
-                                            onComplete = {
-                                                onSwitchToLiveTracker()
-                                            }
+                                if (expandedTrainLoading) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                    }
+                                } else {
+                                    expandedTrainStatus?.let { status ->
+                                        Text(
+                                            text = "Ultimo rilevamento: ${status.lastDetectedStation}",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        status.nextStop?.let { next ->
+                                            Text(
+                                                text = "Prossima fermata: ${next.stationName} (${formatTime(next.actualOrEstimatedTimeMs)})",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(top = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Button(
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            programTrainInLiveTracker(
+                                                departure = departure,
+                                                originQueryText = originQuery.text,
+                                                destinationQueryText = destinationQuery.text,
+                                                context = context,
+                                                onComplete = {
+                                                    onSwitchToLiveTracker()
+                                                }
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Bolt,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = "Programma nel Live Tracker",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimary
                                         )
                                     }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                )
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Bolt,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Text(
-                                        text = "Programma nel Live Tracker",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimary
-                                    )
                                 }
                             }
                         }
@@ -2104,8 +2228,12 @@ fun TrainStatusCard(
     onToggleFavorite: () -> Unit,
     onCloseDetail: () -> Unit,
     userBoardingStation: String,
-    userAlightingStation: String
+    userAlightingStation: String,
+    onSwitchToLiveTracker: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -2402,6 +2530,110 @@ fun TrainStatusCard(
                             )
                         }
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Pulsante Programma nel Live Tracker nella Scheda Dettaglio Treno Cerca per Numero
+            Button(
+                onClick = {
+                    coroutineScope.launch {
+                        val liveManager = LiveTrainManager(context)
+                        val autoMonitoredStops = mutableListOf<MonitoredStop>()
+
+                        val totalStopsCount = status.stops.size
+                        if (totalStopsCount > 1) {
+                            val boardingIdx = status.stops.indexOfFirst {
+                                it.stationName.contains(userBoardingStation, ignoreCase = true)
+                            }.takeIf { it >= 0 } ?: 0
+
+                            val alightingIdx = status.stops.indexOfFirst {
+                                it.stationName.contains(userAlightingStation, ignoreCase = true)
+                            }.takeIf { it >= 0 } ?: (totalStopsCount - 1)
+
+                            val boardingStop = status.stops.getOrNull(boardingIdx)
+                            val alightingStop = status.stops.getOrNull(alightingIdx)
+
+                            if (boardingStop != null) {
+                                val pct = ((boardingIdx.toFloat() / (totalStopsCount - 1).toFloat()) * 100).toInt().coerceIn(0, 100)
+                                autoMonitoredStops.add(
+                                    MonitoredStop(
+                                        stationId = boardingStop.stationId,
+                                        stationName = boardingStop.stationName,
+                                        progressPercentage = pct
+                                    )
+                                )
+                            }
+
+                            if (alightingStop != null && alightingStop.stationId != boardingStop?.stationId) {
+                                val pct = ((alightingIdx.toFloat() / (totalStopsCount - 1).toFloat()) * 100).toInt().coerceIn(0, 100)
+                                autoMonitoredStops.add(
+                                    MonitoredStop(
+                                        stationId = alightingStop.stationId,
+                                        stationName = alightingStop.stationName,
+                                        progressPercentage = pct
+                                    )
+                                )
+                            }
+                        }
+
+                        val newConfig = LiveTrainConfig(
+                            id = UUID.randomUUID().toString(),
+                            trainNumber = status.trainNumber,
+                            daysOfWeek = setOf(
+                                Calendar.SUNDAY, Calendar.MONDAY, Calendar.TUESDAY,
+                                Calendar.WEDNESDAY, Calendar.THURSDAY, Calendar.FRIDAY, Calendar.SATURDAY
+                            ),
+                            originStationId = "",
+                            originStationName = status.originStationName,
+                            destinationStationName = status.destinationStationName,
+                            scheduledDepartureTime = "",
+                            isEnabled = true,
+                            monitoredStops = autoMonitoredStops
+                        )
+                        liveManager.saveLiveTrain(newConfig)
+
+                        val todayDayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
+                        if (newConfig.isScheduledForDay(todayDayOfWeek)) {
+                            TrainTrackerForegroundService.startService(
+                                context = context,
+                                trainNumber = newConfig.trainNumber
+                            )
+                        }
+
+                        Toast.makeText(
+                            context,
+                            "Treno ${status.trainNumber} salvato nel Live Tracker!",
+                            Toast.LENGTH_LONG
+                        ).show()
+
+                        onSwitchToLiveTracker()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Bolt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Programma nel Live Tracker",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
                 }
             }
         }

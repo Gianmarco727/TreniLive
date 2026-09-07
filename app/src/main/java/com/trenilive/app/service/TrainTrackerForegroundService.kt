@@ -23,6 +23,7 @@ import com.trenilive.app.data.ViaggiaTrenoService
 import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.abs
 
 class TrainTrackerForegroundService : Service() {
 
@@ -42,6 +43,16 @@ class TrainTrackerForegroundService : Service() {
         super.onCreate()
         createNotificationChannel()
         ensureMediaSessionState(0)
+    }
+
+    private fun getNotificationIdForTrain(trainNum: String?): Int {
+        if (trainNum.isNullOrBlank()) return NOTIFICATION_ID_DEFAULT
+        val parsed = trainNum.trim().toIntOrNull()
+        return if (parsed != null && parsed in 1..99999) {
+            1000 + (parsed % 10000)
+        } else {
+            1000 + (abs(trainNum.trim().hashCode()) % 10000)
+        }
     }
 
     private fun ensureMediaSessionState(progressPercentage: Int = 0) {
@@ -142,6 +153,8 @@ class TrainTrackerForegroundService : Service() {
             isInitial = true
         )
 
+        val notifId = getNotificationIdForTrain(trainNumber)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
@@ -149,12 +162,12 @@ class TrainTrackerForegroundService : Service() {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
             }
             startForeground(
-                NOTIFICATION_ID,
+                notifId,
                 initialNotification,
                 serviceType
             )
         } else {
-            startForeground(NOTIFICATION_ID, initialNotification)
+            startForeground(notifId, initialNotification)
         }
 
         serviceScope.launch {
@@ -427,16 +440,10 @@ class TrainTrackerForegroundService : Service() {
                 builder.setOnlyAlertOnce(true)
             }
 
-            if (whenTimestamp > System.currentTimeMillis()) {
+            // RIMOSSI IL CRONOMETRO E IL TIMER CHE DECREMENTAVA
+            if (whenTimestamp > 0) {
                 builder.setWhen(whenTimestamp)
-                builder.setShowWhen(true)
-                builder.setUsesChronometer(true)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    builder.setChronometerCountDown(true)
-                }
-            } else if (whenTimestamp > 0) {
-                builder.setWhen(whenTimestamp)
-                builder.setShowWhen(true)
+                builder.setShowWhen(false)
             }
 
             if (Build.VERSION.SDK_INT >= 35) {
@@ -497,14 +504,6 @@ class TrainTrackerForegroundService : Service() {
                 builder.setOnlyAlertOnce(true)
             }
 
-            if (whenTimestamp > 0) {
-                builder.setWhen(whenTimestamp)
-                builder.setShowWhen(true)
-                if (whenTimestamp > System.currentTimeMillis()) {
-                    builder.setUsesChronometer(true)
-                }
-            }
-
             builder.build()
         }
 
@@ -518,7 +517,8 @@ class TrainTrackerForegroundService : Service() {
     @SuppressLint("MissingPermission")
     private fun notifySafely(notification: Notification) {
         try {
-            NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
+            val notifId = getNotificationIdForTrain(activeTrainNumber)
+            NotificationManagerCompat.from(this).notify(notifId, notification)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -535,7 +535,9 @@ class TrainTrackerForegroundService : Service() {
                 e.printStackTrace()
             }
         }
+        val notifId = getNotificationIdForTrain(activeTrainNumber)
         stopForeground(STOP_FOREGROUND_REMOVE)
+        NotificationManagerCompat.from(this).cancel(notifId)
         stopSelf()
     }
 
@@ -579,7 +581,7 @@ class TrainTrackerForegroundService : Service() {
     companion object {
         const val CHANNEL_ID = "live_train_tracking_channel_v12"
         const val CHANNEL_NAME = "Tracciamento Treni Live"
-        const val NOTIFICATION_ID = 1001
+        const val NOTIFICATION_ID_DEFAULT = 1001
 
         const val ACTION_START_TRACKING = "com.trenilive.app.START_TRACKING"
         const val ACTION_STOP_TRACKING = "com.trenilive.app.STOP_TRACKING"
