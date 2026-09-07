@@ -17,7 +17,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -118,6 +120,7 @@ fun MainTabScreen(modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TrainTrackerScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -125,6 +128,7 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
     var favoriteList by remember { mutableStateOf(favoritesManager.getFavoriteTrains()) }
 
     var trainNumberInput by remember { mutableStateOf("") }
+    var favoriteToRemove by remember { mutableStateOf<String?>(null) }
 
     // Campi stazioni per la ricerca gestiti con TextFieldValue per controllo del cursore
     var originQuery by remember { mutableStateOf(TextFieldValue("")) }
@@ -159,6 +163,32 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
             scrollState.animateScrollBy(-140f)
         }
         previousSuggestionsCount = currentCount
+    }
+
+    // Dialog di conferma rimozione dai preferiti tramite pressione prolungata
+    favoriteToRemove?.let { trainNum ->
+        AlertDialog(
+            onDismissRequest = { favoriteToRemove = null },
+            title = { Text("Rimuovere dai Preferiti?", fontWeight = FontWeight.Bold) },
+            text = { Text("Vuoi rimuovere il Treno $trainNum dai tuoi preferiti salvati?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        favoritesManager.toggleFavorite(trainNum)
+                        favoriteList = favoritesManager.getFavoriteTrains()
+                        favoriteToRemove = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E))
+                ) {
+                    Text("Rimuovi", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { favoriteToRemove = null }) {
+                    Text("Annulla")
+                }
+            }
+        )
     }
 
     // Funzione ricerca diretta per numero di treno
@@ -329,14 +359,26 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
 
         // BARRA PREFERITI SALVATI
         if (favoriteList.isNotEmpty()) {
-            Text(
-                text = "I MIEI PREFERITI",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                letterSpacing = 0.5.sp,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "I MIEI PREFERITI",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = 0.5.sp
+                )
+                Text(
+                    text = "Tieni premuto per rimuovere",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
 
             Row(
                 modifier = Modifier
@@ -351,6 +393,15 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                             trainNumberInput = favNum
                             searchByTrainNumber(favNum)
                         },
+                        modifier = Modifier.combinedClickable(
+                            onClick = {
+                                trainNumberInput = favNum
+                                searchByTrainNumber(favNum)
+                            },
+                            onLongClick = {
+                                favoriteToRemove = favNum
+                            }
+                        ),
                         label = {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -706,12 +757,45 @@ fun TrainTrackerScreen(modifier: Modifier = Modifier) {
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            text = error,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(10.dp)
-                        )
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = error,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                fontSize = 13.sp
+                            )
+
+                            val searchingNum = trainNumberInput.trim()
+                            if (searchingNum.isNotBlank() && favoritesManager.isFavorite(searchingNum)) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        favoritesManager.toggleFavorite(searchingNum)
+                                        favoriteList = favoritesManager.getFavoriteTrains()
+                                        errorMessage = null
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Delete,
+                                            contentDescription = null,
+                                            tint = Color(0xFFD32F2F),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = "Rimuovi Treno $searchingNum dai Preferiti",
+                                            color = Color(0xFFD32F2F),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
