@@ -1145,6 +1145,9 @@ private suspend fun programTrainInLiveTracker(
     val originStationId = departure.originStationId
     val autoMonitoredStops = mutableListOf<MonitoredStop>()
 
+    // Rileva automaticamente i giorni della settimana in cui il treno circola
+    val detectedDays = ViaggiaTrenoService.detectRunningDaysForTrain(departure.trainNumber)
+
     when (val statusRes = ViaggiaTrenoService.fetchTrainStatusForDeparture(
         trainNumber = departure.trainNumber,
         departureStationId = departure.originStationId,
@@ -1203,10 +1206,7 @@ private suspend fun programTrainInLiveTracker(
     val newConfig = LiveTrainConfig(
         id = UUID.randomUUID().toString(),
         trainNumber = departure.trainNumber,
-        daysOfWeek = setOf(
-            Calendar.SUNDAY, Calendar.MONDAY, Calendar.TUESDAY,
-            Calendar.WEDNESDAY, Calendar.THURSDAY, Calendar.FRIDAY, Calendar.SATURDAY
-        ),
+        daysOfWeek = detectedDays, // Usiamo i giorni rilevati automaticamente dalle API!
         originStationId = originStationId,
         originStationName = originStationName,
         destinationStationName = destinationStationName,
@@ -1222,7 +1222,7 @@ private suspend fun programTrainInLiveTracker(
 
     Toast.makeText(
         context,
-        "Treno ${departure.trainNumber} programmato nel Live Tracker!",
+        "Treno ${departure.trainNumber} programmato nel Live Tracker per i suoi giorni di circolazione!",
         Toast.LENGTH_LONG
     ).show()
 
@@ -1374,13 +1374,14 @@ fun LiveTrackerScreen(
         val cleanNum = targetNumber.trim()
         if (cleanNum.isBlank()) {
             addError = "Inserisci un numero di treno valido."
-        } else if (selectedDays.isEmpty()) {
-            addError = "Seleziona almeno un giorno della settimana."
         } else {
             addError = null
             isAdding = true
 
             coroutineScope.launch {
+                // Rileva automaticamente i giorni della settimana in cui il treno circola
+                val detectedDays = ViaggiaTrenoService.detectRunningDaysForTrain(cleanNum)
+
                 when (val resolveRes = ViaggiaTrenoService.resolveTrain(cleanNum)) {
                     is ViaggiaTrenoResult.Success -> {
                         val (num, stationId, timestamp) = resolveRes.data
@@ -1390,7 +1391,7 @@ fun LiveTrackerScreen(
                                 val newConfig = LiveTrainConfig(
                                     id = UUID.randomUUID().toString(),
                                     trainNumber = num,
-                                    daysOfWeek = selectedDays,
+                                    daysOfWeek = detectedDays, // Usiamo i giorni rilevati automaticamente dalle API!
                                     originStationId = stationId,
                                     originStationName = status.originStationName,
                                     destinationStationName = status.destinationStationName,
@@ -1402,6 +1403,12 @@ fun LiveTrackerScreen(
                                 addError = null
 
                                 LiveTrainScheduler.scheduleAlarmsAndCheckActiveTrains(context)
+
+                                Toast.makeText(
+                                    context,
+                                    "Treno $num salvato con i suoi giorni di circolazione rilevati!",
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
                             is ViaggiaTrenoResult.Error -> {
                                 addError = statusRes.message
@@ -2582,13 +2589,13 @@ fun TrainStatusCard(
 
                         val departureTimeLocal = status.stops.firstOrNull()?.scheduledTimeMs?.let { formatTime(it) } ?: ""
 
+                        // Rileva automaticamente i giorni della settimana in cui il treno circola
+                        val detectedDays = ViaggiaTrenoService.detectRunningDaysForTrain(status.trainNumber)
+
                         val newConfig = LiveTrainConfig(
                             id = UUID.randomUUID().toString(),
                             trainNumber = status.trainNumber,
-                            daysOfWeek = setOf(
-                                Calendar.SUNDAY, Calendar.MONDAY, Calendar.TUESDAY,
-                                Calendar.WEDNESDAY, Calendar.THURSDAY, Calendar.FRIDAY, Calendar.SATURDAY
-                            ),
+                            daysOfWeek = detectedDays, // Usiamo i giorni rilevati dalle API!
                             originStationId = "",
                             originStationName = status.originStationName,
                             destinationStationName = status.destinationStationName,
@@ -2602,7 +2609,7 @@ fun TrainStatusCard(
 
                         Toast.makeText(
                             context,
-                            "Treno ${status.trainNumber} salvato nel Live Tracker!",
+                            "Treno ${status.trainNumber} salvato nel Live Tracker per i suoi giorni di circolazione!",
                             Toast.LENGTH_LONG
                         ).show()
 

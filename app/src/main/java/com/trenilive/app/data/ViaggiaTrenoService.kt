@@ -1,6 +1,8 @@
 package com.trenilive.app.data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -118,6 +120,51 @@ object ViaggiaTrenoService {
         val actual = effPartenza ?: effArrivo
 
         return Pair(scheduled, actual)
+    }
+
+    /**
+     * Rileva i giorni della settimana in cui il treno circola effettivamente interrogando i 7 giorni prossimi.
+     */
+    suspend fun detectRunningDaysForTrain(trainNumber: String): Set<Int> = withContext(Dispatchers.IO) {
+        val cleanNum = trainNumber.trim()
+        val allDays = setOf(
+            Calendar.MONDAY, Calendar.TUESDAY, Calendar.WEDNESDAY,
+            Calendar.THURSDAY, Calendar.FRIDAY, Calendar.SATURDAY, Calendar.SUNDAY
+        )
+
+        if (cleanNum.isBlank()) return@withContext allDays
+
+        val resolveRes = resolveTrain(cleanNum)
+        if (resolveRes !is ViaggiaTrenoResult.Success) {
+            return@withContext allDays
+        }
+
+        val (num, originStationId, _) = resolveRes.data
+        val nowMs = System.currentTimeMillis()
+
+        try {
+            val daysJobs = (0..6).map { dayOffset ->
+                async {
+                    val cal = Calendar.getInstance().apply {
+                        timeInMillis = nowMs
+                        add(Calendar.DAY_OF_YEAR, dayOffset)
+                    }
+                    val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+
+                    val departuresRes = fetchStationDepartures(originStationId, cal.time)
+                    val isRunning = if (departuresRes is ViaggiaTrenoResult.Success) {
+                        departuresRes.data.any { it.trainNumber == num }
+                    } else false
+
+                    if (isRunning) dayOfWeek else null
+                }
+            }
+
+            val detectedDays = daysJobs.awaitAll().filterNotNull().toSet()
+            if (detectedDays.isNotEmpty()) detectedDays else allDays
+        } catch (e: Exception) {
+            allDays
+        }
     }
 
     /**
