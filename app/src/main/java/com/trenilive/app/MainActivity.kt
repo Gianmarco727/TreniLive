@@ -55,6 +55,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import com.trenilive.app.data.*
 import com.trenilive.app.service.LiveTrainScheduler
@@ -120,11 +121,12 @@ fun MainTabScreen(modifier: Modifier = Modifier) {
             )
         }
 
-        // Mantiene sia TrainTrackerScreen che LiveTrackerScreen sempre attivi nella gerarchia per preservare al 100% lo stato di ricerca
+        // Mantiene sia TrainTrackerScreen che LiveTrackerScreen sempre attivi in memoria con zIndex per garantire la gerarchia dei tocchi
         Box(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .zIndex(if (selectedTab == 0) 1f else 0f)
                     .graphicsLayer {
                         alpha = if (selectedTab == 0) 1f else 0f
                     }
@@ -135,6 +137,7 @@ fun MainTabScreen(modifier: Modifier = Modifier) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .zIndex(if (selectedTab == 1) 1f else 0f)
                     .graphicsLayer {
                         alpha = if (selectedTab == 1) 1f else 0f
                     }
