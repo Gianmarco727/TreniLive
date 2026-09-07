@@ -1120,6 +1120,9 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
     // Gestione Selezione Fermate Monitorate
     var selectedConfigForStops by remember { mutableStateOf<LiveTrainConfig?>(null) }
 
+    // Gestione Modifica Giorni Monitorati del Treno Programmato
+    var selectedConfigForDays by remember { mutableStateOf<LiveTrainConfig?>(null) }
+
     // Gestione Banner Suggerimento Impostazioni Samsung Dismissable
     var isSamsungHintDismissed by remember { mutableStateOf(liveManager.isSamsungHintDismissed()) }
 
@@ -1143,6 +1146,29 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                     context.startForegroundService(refreshIntent)
                 } else {
                     context.startService(refreshIntent)
+                }
+            }
+        )
+    }
+
+    // Dialog modifica giorni monitorati per un treno già programmato
+    selectedConfigForDays?.let { config ->
+        EditDaysSelectionDialog(
+            config = config,
+            onDismiss = { selectedConfigForDays = null },
+            onSave = { updatedDays ->
+                val updatedConfig = config.copy(daysOfWeek = updatedDays)
+                liveTrains = liveManager.saveLiveTrain(updatedConfig)
+                selectedConfigForDays = null
+
+                // Invia refresh o aggiorna stato del servizio
+                val todayDayOfWeek = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
+                if (updatedConfig.isScheduledForDay(todayDayOfWeek)) {
+                    TrainTrackerForegroundService.startService(
+                        context = context,
+                        trainNumber = updatedConfig.trainNumber,
+                        stationId = updatedConfig.originStationId
+                    )
                 }
             }
         )
@@ -1271,7 +1297,7 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "I treni salvati qui attivalo automaticamente la notifica Live nei giorni programmati.",
+            text = "I treni salvati qui attivano automaticamente la notifica Live nei giorni programmati.",
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
@@ -1605,13 +1631,30 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
                                         modifier = Modifier.weight(1f, fill = false)
                                     )
                                 }
-                                Text(
-                                    text = "📅 ${config.getDaysFormatted()}",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
+
+                                // Testo Giorni Selezionati Cliccabile per Modifica
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier
+                                        .padding(top = 6.dp)
+                                        .clickable {
+                                            selectedConfigForDays = config
+                                        }
+                                ) {
+                                    Text(
+                                        text = "📅 ${config.getDaysFormatted()}",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Outlined.Edit,
+                                        contentDescription = "Modifica giorni",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
                             }
 
                             Switch(
@@ -1793,6 +1836,108 @@ fun LiveTrackerScreen(modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+@Composable
+fun EditDaysSelectionDialog(
+    config: LiveTrainConfig,
+    onDismiss: () -> Unit,
+    onSave: (Set<Int>) -> Unit
+) {
+    var tempDays by remember { mutableStateOf(config.daysOfWeek) }
+
+    val dayOptions = listOf(
+        Calendar.MONDAY to "LUN",
+        Calendar.TUESDAY to "MAR",
+        Calendar.WEDNESDAY to "MER",
+        Calendar.THURSDAY to "GIO",
+        Calendar.FRIDAY to "VEN",
+        Calendar.SATURDAY to "SAB",
+        Calendar.SUNDAY to "DOM"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "📅 Modifica Giorni Treno ${config.trainNumber}",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = "Seleziona i giorni nei quali attivare il tracciamento automatico del treno:",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    dayOptions.forEach { (calDay, label) ->
+                        val isSelected = tempDays.contains(calDay)
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                tempDays = if (isSelected) {
+                                    tempDays - calDay
+                                } else {
+                                    tempDays + calDay
+                                }
+                            },
+                            label = { Text(label, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TextButton(onClick = {
+                        tempDays = setOf(
+                            Calendar.MONDAY, Calendar.TUESDAY, Calendar.WEDNESDAY,
+                            Calendar.THURSDAY, Calendar.FRIDAY
+                        )
+                    }) {
+                        Text("Lun-Ven", fontSize = 12.sp)
+                    }
+                    TextButton(onClick = {
+                        tempDays = setOf(
+                            Calendar.SUNDAY, Calendar.MONDAY, Calendar.TUESDAY,
+                            Calendar.WEDNESDAY, Calendar.THURSDAY, Calendar.FRIDAY, Calendar.SATURDAY
+                        )
+                    }) {
+                        Text("Tutti i giorni", fontSize = 12.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (tempDays.isNotEmpty()) {
+                        onSave(tempDays)
+                    }
+                },
+                enabled = tempDays.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E))
+            ) {
+                Text("Salva Giorni", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Annulla")
+            }
+        }
+    )
 }
 
 @Composable
