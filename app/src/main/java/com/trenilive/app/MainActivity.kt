@@ -98,7 +98,7 @@ fun MainTabScreen(modifier: Modifier = Modifier) {
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
-                        Text("Cerca Treni", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Cerca treni", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
                 }
             )
@@ -115,7 +115,7 @@ fun MainTabScreen(modifier: Modifier = Modifier) {
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
-                        Text("Live Tracker", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Live tracker", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
                 }
             )
@@ -199,8 +199,8 @@ fun TrainTrackerScreen(
     favoriteToRemove?.let { trainNum ->
         AlertDialog(
             onDismissRequest = { favoriteToRemove = null },
-            title = { Text("Rimuovere dai Preferiti?", fontWeight = FontWeight.Bold) },
-            text = { Text("Vuoi rimuovere il Treno $trainNum dai tuoi preferiti salvati?") },
+            title = { Text("Rimuovere dai preferiti?", fontWeight = FontWeight.Bold) },
+            text = { Text("Vuoi rimuovere il treno $trainNum dai tuoi preferiti salvati?") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -256,9 +256,9 @@ fun TrainTrackerScreen(
         val destName = destinationQuery.text.trim()
 
         if (originName.isEmpty()) {
-            errorMessage = "La Stazione di Partenza è obbligatoria."
+            errorMessage = "La stazione di partenza è obbligatoria."
         } else if (destName.isEmpty()) {
-            errorMessage = "La Stazione di Arrivo è obbligatoria per la ricerca per tratta."
+            errorMessage = "La stazione di arrivo è obbligatoria per la ricerca per tratta."
         } else {
             errorMessage = null
             isLoading = true
@@ -358,7 +358,7 @@ fun TrainTrackerScreen(
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "Cerca per Numero Treno o per Tratta Completa (anche con Cambi)",
+            text = "Cerca per numero treno o per tratta completa (anche con cambi)",
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
@@ -373,7 +373,7 @@ fun TrainTrackerScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "I MIEI PREFERITI",
+                    text = "I miei preferiti",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -432,7 +432,7 @@ fun TrainTrackerScreen(
 
         if (recentSearches.isNotEmpty()) {
             Text(
-                text = "RICERCHE RECENTI",
+                text = "Ricerche recenti",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -518,7 +518,7 @@ fun TrainTrackerScreen(
                         }
                     }
                     Text(
-                        text = "Ricerca Diretta per Numero Treno",
+                        text = "Ricerca diretta per numero treno",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -532,7 +532,7 @@ fun TrainTrackerScreen(
                     onValueChange = { tfv ->
                         trainNumberInput = tfv
                     },
-                    placeholder = { Text("Es. 9410, 16022, 16016") },
+                    placeholder = { Text("Numero treno (es. 9410)") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number,
@@ -572,7 +572,7 @@ fun TrainTrackerScreen(
                             contentColor = Color.White
                         )
                     ) {
-                        Text("Cerca Treno $trainNumberInput", fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Cerca treno $trainNumberInput", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
 
@@ -597,7 +597,7 @@ fun TrainTrackerScreen(
                         }
                     }
                     Text(
-                        text = "Oppure Cerca per Tratta Completa",
+                        text = "Oppure cerca per tratta completa",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -626,7 +626,7 @@ fun TrainTrackerScreen(
                             originSuggestions = emptyList()
                         }
                     },
-                    placeholder = { Text("Stazione di Partenza (es. Conegliano)") },
+                    placeholder = { Text("Stazione di partenza") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
@@ -702,7 +702,7 @@ fun TrainTrackerScreen(
                             destinationSuggestions = emptyList()
                         }
                     },
-                    placeholder = { Text("Stazione di Destinazione (es. Bologna Centrale)") },
+                    placeholder = { Text("Stazione di arrivo") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
@@ -843,7 +843,7 @@ fun TrainTrackerScreen(
                         CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                     } else {
                         Text(
-                            text = "Cerca Soluzioni Tratta",
+                            text = "Cerca soluzioni tratta",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -877,11 +877,11 @@ fun TrainTrackerScreen(
             }
         }
 
-        // LISTA SOLUZIONI TROVATE (CON DETTAGLI REALI COMPLETI AD ESPANSIONE DELLA SCHEDA DIRETTA)
+        // LISTA SOLUZIONI TROVATE (CON SENTENCE CASE SUI TITOLI E DICITURA SEMPLIFICATA "Programma nel Tracker")
         if (routeSolutions.isNotEmpty() && !isLoading) {
             Spacer(modifier = Modifier.height(20.dp))
             Text(
-                text = "SOLUZIONI DI VIAGGIO DISPONIBILI (${routeSolutions.size})",
+                text = "Soluzioni di viaggio disponibili (${routeSolutions.size})",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -995,7 +995,7 @@ fun TrainTrackerScreen(
                                             }
 
                                             Text(
-                                                text = "STATO IN TEMPO REALE",
+                                                text = "Stato in tempo reale",
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.primary
@@ -1020,7 +1020,7 @@ fun TrainTrackerScreen(
 
                                         // 2. ULTIMO RILEVAMENTO
                                         Text(
-                                            text = "ULTIMO RILEVAMENTO",
+                                            text = "Ultimo rilevamento",
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.primary,
@@ -1050,7 +1050,7 @@ fun TrainTrackerScreen(
                                                 ) {
                                                     Column(modifier = Modifier.weight(1f)) {
                                                         Text(
-                                                            text = "PROSSIMA FERMATA",
+                                                            text = "Prossima fermata",
                                                             fontSize = 10.sp,
                                                             fontWeight = FontWeight.Bold,
                                                             color = MaterialTheme.colorScheme.primary
@@ -1087,7 +1087,7 @@ fun TrainTrackerScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
                                             Text(
-                                                text = "Avanzamento Treno Totale",
+                                                text = "Avanzamento treno totale",
                                                 fontSize = 11.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -1139,7 +1139,7 @@ fun TrainTrackerScreen(
                                             ) {
                                                 Column(modifier = Modifier.padding(12.dp)) {
                                                     Text(
-                                                        text = "TRATTA SELEZIONATA",
+                                                        text = "Tratta selezionata",
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = MaterialTheme.colorScheme.secondary
@@ -1189,7 +1189,6 @@ fun TrainTrackerScreen(
                                             }
                                         }
                                     } else {
-                                        // Fallback minimale se lo stato non era caricato
                                         Text(
                                             text = "Partenza: ${singleLeg.originStationName} (${singleLeg.departureTimeFormatted})",
                                             fontSize = 13.sp,
@@ -1272,7 +1271,7 @@ fun TrainTrackerScreen(
 
                                 Spacer(modifier = Modifier.height(10.dp))
 
-                                // PULSANTE PROGRAMMAZIONE NEL TRACKER (MOSTRATO SOLO SE ESPANSO)
+                                // PULSANTE PROGRAMMAZIONE NEL TRACKER CON TESTO SEMPLIFICATO "Programma nel Tracker"
                                 Button(
                                     onClick = {
                                         coroutineScope.launch {
@@ -1303,7 +1302,7 @@ fun TrainTrackerScreen(
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Text(
-                                            text = if (isDirect) "Programma Treno Diretto nel Tracker" else "Programma Soluzione con Cambio nel Tracker",
+                                            text = "Programma nel Tracker",
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onPrimary
@@ -1627,7 +1626,7 @@ fun LiveTrackerScreen(
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "I treni salvati qui attivano automaticamente la notifica Live nei giorni programmati.",
+            text = "I treni salvati qui attivano automaticamente la notifica live nei giorni programmati.",
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
@@ -1668,7 +1667,7 @@ fun LiveTrackerScreen(
                         )
                         Column {
                             Text(
-                                text = "Tocca qui per abilitare 'Notifiche Live' in Impostazioni",
+                                text = "Tocca qui per abilitare 'Notifiche live' in impostazioni",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -1722,7 +1721,7 @@ fun LiveTrackerScreen(
 
         if (favoriteTrains.isNotEmpty()) {
             Text(
-                text = "AGGIUNGI RAPIDO DAI MIEI PREFERITI",
+                text = "Aggiungi rapido dai miei preferiti",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -1782,7 +1781,7 @@ fun LiveTrackerScreen(
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
-                    text = "PROGRAMMA UN NUOVO TRENO",
+                    text = "Programma un nuovo treno",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -1793,7 +1792,7 @@ fun LiveTrackerScreen(
                 OutlinedTextField(
                     value = inputTrainNumber,
                     onValueChange = { inputTrainNumber = it },
-                    placeholder = { Text("Numero Treno (es. 16758, 9410)") },
+                    placeholder = { Text("Numero treno (es. 9410)") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
@@ -1888,7 +1887,7 @@ fun LiveTrackerScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "SOLUZIONI PROGRAMMATE (${liveTrains.size})",
+            text = "Soluzioni programmate (${liveTrains.size})",
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
@@ -2112,7 +2111,7 @@ fun LiveTrackerScreen(
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Text(
-                                        text = if (effLegs.size > 1) "Avvia Notifiche Ora" else "Avvia Notifica Ora",
+                                        text = if (effLegs.size > 1) "Avvia notifiche ora" else "Avvia notifica ora",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -2165,7 +2164,7 @@ fun LiveTrackerScreen(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "OPZIONI SVILUPPATORE (DEBUG)",
+                        text = "Opzioni sviluppatore (Debug)",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.secondary
@@ -2240,7 +2239,7 @@ fun EditDaysSelectionDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "📅 Modifica Giorni ${config.getDisplayTrainNumbers()}",
+                text = "📅 Modifica giorni ${config.getDisplayTrainNumbers()}",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -2309,7 +2308,7 @@ fun EditDaysSelectionDialog(
                 enabled = tempDays.isNotEmpty(),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E))
             ) {
-                Text("Salva Giorni", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Salva giorni", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -2363,7 +2362,7 @@ fun MonitoredStopsSelectionDialog(
         title = {
             Column {
                 Text(
-                    text = "📍 Fermate Monitorate ${config.getDisplayTrainNumbers()}",
+                    text = "📍 Fermate monitorate ${config.getDisplayTrainNumbers()}",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -2466,7 +2465,7 @@ fun MonitoredStopsSelectionDialog(
                 enabled = !isLoadingStops && stopsError == null,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC8102E))
             ) {
-                Text("Salva Fermate (${tempSelectedStops.size}/4)", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Salva fermate (${tempSelectedStops.size}/4)", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -2605,7 +2604,7 @@ fun TrainStatusCard(
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             Text(
-                text = "ULTIMO RILEVAMENTO",
+                text = "Ultimo rilevamento",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -2634,7 +2633,7 @@ fun TrainStatusCard(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "PROSSIMA FERMATA",
+                                text = "Prossima fermata",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -2671,7 +2670,7 @@ fun TrainStatusCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Avanzamento Treno Totale",
+                    text = "Avanzamento treno totale",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2725,7 +2724,7 @@ fun TrainStatusCard(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = "TRATTA SELEZIONATA DA TE",
+                                text = "Tratta selezionata",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.secondary
@@ -2871,7 +2870,7 @@ fun TrainStatusCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "Programma nel Live Tracker",
+                        text = "Programma nel Tracker",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimary
