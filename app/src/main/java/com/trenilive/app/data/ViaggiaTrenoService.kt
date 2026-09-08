@@ -106,7 +106,6 @@ object ViaggiaTrenoService {
         val stopWords = normStop.split(" ").filter { it.length > 2 }
 
         if (queryWords.isNotEmpty() && stopWords.isNotEmpty()) {
-            // La prima parola identificativa della città DEVE coincidere (es. "TREVISO" == "TREVISO", ma "MOGLIANO" != "TREVISO")
             return queryWords.first() == stopWords.first()
         }
 
@@ -555,7 +554,8 @@ object ViaggiaTrenoService {
 
     /**
      * Cerca i treni e le soluzioni con o senza cambi tra una stazione di partenza e una di arrivo.
-     * Se esistono treni diretti, li restituisce subito evitando percorsi a ritroso o inutili coincidenze.
+     * Fase 1: Cerca le soluzioni DIRETTE su più finestre orarie. Se esistono, le restituisce in via esclusiva.
+     * Fase 2: Solo se NON esistono treni diretti, effettua la ricerca delle soluzioni con cambio.
      */
     suspend fun fetchRouteSolutionsWithTransfers(
         originStationId: String,
@@ -565,7 +565,7 @@ object ViaggiaTrenoService {
         minSolutions: Int = 5
     ): ViaggiaTrenoResult<List<RouteSolution>> = withContext(Dispatchers.IO) {
         try {
-            val solutions = mutableListOf<RouteSolution>()
+            val directSolutions = mutableListOf<RouteSolution>()
             val processedSolutionKeys = mutableSetOf<String>()
 
             var currentSearchDate = date
@@ -586,10 +586,11 @@ object ViaggiaTrenoService {
                 is ViaggiaTrenoResult.Error -> {}
             }
 
-            while (solutions.size < minSolutions && attempts < 4) {
+            // FASE 1: RACCOLTA ESCLUSIVA SOLUZIONI DIRETTE SULLA TRATTA
+            while (directSolutions.size < minSolutions && attempts < 4) {
                 val departuresRes = fetchStationDepartures(originStationId, currentSearchDate)
                 if (departuresRes is ViaggiaTrenoResult.Error) {
-                    if (solutions.isNotEmpty()) break
+                    if (directSolutions.isNotEmpty()) break
                     return@withContext departuresRes
                 }
 
@@ -600,7 +601,6 @@ object ViaggiaTrenoService {
                     continue
                 }
 
-                // 1. RECUPERA LO STATO DEI TRENI DI PARTENZA IN PARALLELO
                 val departuresWithStatus = rawDepartures.take(15).map { dep ->
                     async {
                         val statusRes = if (isSameDay(currentSearchDate, Date())) {
@@ -618,7 +618,6 @@ object ViaggiaTrenoService {
                     }
                 }.awaitAll().filterNotNull()
 
-                // PASSAGGIO 1: RICERCA SOLUZIONI DIRETTE
                 for ((dep, status) in departuresWithStatus) {
                     val stops = status.stops
                     if (stops.isEmpty()) continue
@@ -669,7 +668,7 @@ object ViaggiaTrenoService {
                                 platform = dep.platform
                             )
 
-                            solutions.add(
+                            directSolutions.add(
                                 RouteSolution(
                                     originStationId = originStationId,
                                     originStationName = boardingStop.stationName,
@@ -687,12 +686,52 @@ object ViaggiaTrenoService {
                     }
                 }
 
-                // SE ABBIAMO TROVATO SOLUZIONI DIRETTE, LE RESTITUIMO SUBITO SENZA CERCARE CAMBI A RITROSO!
-                if (solutions.isNotEmpty()) {
-                    break
+                currentSearchDate = Date(currentSearchDate.time + 60 * 60 * 1000L)
+                attempts++
+            }
+
+            // SE ESISTONO TRENI DIRETTI SULLA TRATTA, RESTITUITE SOLO LE SOLUZIONI DIRETTE!
+            if (directSolutions.isNotEmpty()) {
+                val sortedDirect = directSolutions.sortedBy { it.departureTimestampMs }
+                return@withContext ViaggiaTrenoResult.Success(sortedDirect)
+            }
+
+            // FASE 2: SOLO SE NON ESISTONO TRENI DIRETTI, CERCA SOLUZIONI CON CAMBIO (ES. CONEGLIANO ➔ BOLOGNA)
+            val transferSolutions = mutableListOf<RouteSolution>()
+            currentSearchDate = date
+            attempts = 0
+
+            while (transferSolutions.size < minSolutions && attempts < 4) {
+                val departuresRes = fetchStationDepartures(originStationId, currentSearchDate)
+                if (departuresRes is ViaggiaTrenoResult.Error) {
+                    if (transferSolutions.isNotEmpty()) break
+                    return@withContext departuresRes
                 }
 
-                // PASSAGGIO 2: SE NON CI SONO TRENI DIRETTI, CERCA SOLUZIONI CON CAMBIO (ES. CONEGLIANO ➔ BOLOGNA)
+                val rawDepartures = (departuresRes as ViaggiaTrenoResult.Success).data
+                if (rawDepartures.isEmpty()) {
+                    currentSearchDate = Date(currentSearchDate.time + 60 * 60 * 1000L)
+                    attempts++
+                    continue
+                }
+
+                val departuresWithStatus = rawDepartures.take(15).map { dep ->
+                    async {
+                        val statusRes = if (isSameDay(currentSearchDate, Date())) {
+                            resolveTrain(dep.trainNumber).let { resolve ->
+                                if (resolve is ViaggiaTrenoResult.Success) {
+                                    fetchTrainStatus(resolve.data.first, resolve.data.second, resolve.data.third)
+                                } else null
+                            }
+                        } else {
+                            fetchTrainStatusForDeparture(dep.trainNumber, originStationId, dep.departureTimestampMs)
+                        }
+
+                        val status = (statusRes as? ViaggiaTrenoResult.Success)?.data
+                        if (status != null) Pair(dep, status) else null
+                    }
+                }.awaitAll().filterNotNull()
+
                 for ((dep, status) in departuresWithStatus) {
                     val stops = status.stops
                     if (stops.isEmpty()) continue
@@ -807,7 +846,7 @@ object ViaggiaTrenoService {
                                             platform = leg2Dep.platform
                                         )
 
-                                        solutions.add(
+                                        transferSolutions.add(
                                             RouteSolution(
                                                 originStationId = originStationId,
                                                 originStationName = boardingStop.stationName,
@@ -825,7 +864,7 @@ object ViaggiaTrenoService {
                                 }
                             }
                         }
-                        if (solutions.size >= minSolutions) break
+                        if (transferSolutions.size >= minSolutions) break
                     }
                 }
 
@@ -833,7 +872,7 @@ object ViaggiaTrenoService {
                 attempts++
             }
 
-            val sortedSolutions = solutions.sortedBy { it.departureTimestampMs }
+            val sortedSolutions = transferSolutions.sortedBy { it.departureTimestampMs }
             ViaggiaTrenoResult.Success(sortedSolutions)
         } catch (e: Exception) {
             ViaggiaTrenoResult.Error("Errore ricerca tratta: ${e.localizedMessage}", e)
