@@ -810,9 +810,10 @@ object ViaggiaTrenoService {
                         val leg1ArrMs = junctionStop.actualOrEstimatedTimeMs ?: junctionStop.scheduledTimeMs ?: continue
                         val junctionStationId = junctionStop.stationId
 
-                        val transferDate = Date(leg1ArrMs + 3 * 60 * 1000L)
+                        // Cerca partenze dalla stazione di cambio sia all'orario di arrivo sia con un piccolo margine
+                        val transferDate = Date(leg1ArrMs - 5 * 60 * 1000L)
 
-                        // Recupera partenze sia dalla stazione di cambio indicata, sia da Mestre/S.Lucia se nell'area di Venezia
+                        // Recupera partenze sia dalla stazione di cambio indicata, sia da S. Lucia/Mestre nell'area veneziana
                         val leg2Departures = mutableListOf<StationDeparture>()
                         val depRes1 = fetchStationDepartures(junctionStationId, transferDate)
                         if (depRes1 is ViaggiaTrenoResult.Success) {
@@ -825,7 +826,10 @@ object ViaggiaTrenoService {
                             }
                         }
 
-                        val candidateLeg2Departures = leg2Departures.take(30)
+                        val candidateLeg2Departures = leg2Departures
+                            .distinctBy { it.trainNumber }
+                            .sortedBy { it.departureTimestampMs }
+                            .take(30)
 
                         val leg2DeparturesWithStatus = candidateLeg2Departures.map { leg2Dep ->
                             async {
@@ -938,7 +942,11 @@ object ViaggiaTrenoService {
                 attempts++
             }
 
-            val sortedSolutions = transferSolutions.sortedBy { it.departureTimestampMs }
+            // Ordina le soluzioni con cambio per durata totale di viaggio e orario di partenza
+            val sortedSolutions = transferSolutions.sortedWith(
+                compareBy<RouteSolution> { it.departureTimestampMs }
+                    .thenBy { (it.arrivalTimestampMs - it.departureTimestampMs) }
+            )
             ViaggiaTrenoResult.Success(sortedSolutions)
         } catch (e: Exception) {
             ViaggiaTrenoResult.Error("Errore ricerca tratta: ${e.localizedMessage}", e)
