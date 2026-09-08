@@ -82,6 +82,17 @@ object ViaggiaTrenoService {
             .trim()
     }
 
+    private fun isMajorJunctionStation(stationName: String): Boolean {
+        val norm = normalizeStationName(stationName)
+        val majorHubs = listOf(
+            "MESTRE", "S.LUCIA", "PADOVA", "TREVISO", "BOLOGNA", "VERONA",
+            "VICENZA", "ROVIGO", "FERRARA", "UDINE", "TRIESTE", "MILANO",
+            "FIRENZE", "ROMA", "NAPOLI", "TORINO", "GENOVA", "PISA", "AREZZO",
+            "CONEGLIANO", "CASERTA", "BARI", "ANCONA"
+        )
+        return majorHubs.any { hub -> norm.contains(hub) }
+    }
+
     /**
      * Confronta due stazioni per nome o ID gestendo abbreviazioni Trenitalia e codici stazione AV.
      */
@@ -555,7 +566,7 @@ object ViaggiaTrenoService {
     /**
      * Cerca i treni e le soluzioni con o senza cambi tra una stazione di partenza e una di arrivo.
      * Fase 1: Cerca le soluzioni DIRETTE su più finestre orarie. Se esistono, le restituisce in via esclusiva.
-     * Fase 2: Solo se NON esistono treni diretti, effettua la ricerca delle soluzioni con cambio.
+     * Fase 2: Solo se NON esistono treni diretti, effettua la ricerca delle soluzioni con cambio su stazioni di snodo.
      */
     suspend fun fetchRouteSolutionsWithTransfers(
         originStationId: String,
@@ -601,7 +612,7 @@ object ViaggiaTrenoService {
                     continue
                 }
 
-                val departuresWithStatus = rawDepartures.take(15).map { dep ->
+                val departuresWithStatus = rawDepartures.take(20).map { dep ->
                     async {
                         val statusRes = if (isSameDay(currentSearchDate, Date())) {
                             resolveTrain(dep.trainNumber).let { resolve ->
@@ -715,7 +726,7 @@ object ViaggiaTrenoService {
                     continue
                 }
 
-                val departuresWithStatus = rawDepartures.take(15).map { dep ->
+                val departuresWithStatus = rawDepartures.take(25).map { dep ->
                     async {
                         val statusRes = if (isSameDay(currentSearchDate, Date())) {
                             resolveTrain(dep.trainNumber).let { resolve ->
@@ -747,18 +758,18 @@ object ViaggiaTrenoService {
                         if (status.isCancelled || status.progressPercentage >= 100 || boardingStop.isPassed) continue
                     }
 
-                    // Prendi solo le fermate SUCCESSIVE a quella di origine per evitare percorsi a ritroso
-                    val candidateJunctionStops = stops.drop(originIdx + 1).take(6)
+                    // Seleziona solo le fermate di snodo principali successive alla stazione di partenza
+                    val candidateJunctionStops = stops.drop(originIdx + 1).filter { isMajorJunctionStation(it.stationName) }.take(5)
 
                     for (junctionStop in candidateJunctionStops) {
                         val leg1ArrMs = junctionStop.actualOrEstimatedTimeMs ?: junctionStop.scheduledTimeMs ?: continue
                         val junctionStationId = junctionStop.stationId
 
-                        val transferDate = Date(leg1ArrMs + 4 * 60 * 1000L)
+                        val transferDate = Date(leg1ArrMs + 3 * 60 * 1000L)
                         val leg2DeparturesRes = fetchStationDepartures(junctionStationId, transferDate)
                         if (leg2DeparturesRes !is ViaggiaTrenoResult.Success) continue
 
-                        val candidateLeg2Departures = leg2DeparturesRes.data.take(10)
+                        val candidateLeg2Departures = leg2DeparturesRes.data.take(30)
 
                         val leg2DeparturesWithStatus = candidateLeg2Departures.map { leg2Dep ->
                             async {
@@ -864,7 +875,6 @@ object ViaggiaTrenoService {
                                 }
                             }
                         }
-                        if (transferSolutions.size >= minSolutions) break
                     }
                 }
 
