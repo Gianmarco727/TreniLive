@@ -31,11 +31,15 @@ class AlarmReceiver : BroadcastReceiver() {
         Log.d("LiveTrainScheduler", "AlarmReceiver scattato per treno $trainNumber!")
 
         if (!trainNumber.isNullOrBlank()) {
-            TrainTrackerForegroundService.startService(
-                context = context,
-                trainNumber = trainNumber,
-                stationId = stationId
-            )
+            val liveManager = LiveTrainManager(context)
+            // Se l'utente non lo aveva interrotto per oggi, avvia il tracciamento
+            if (!liveManager.isStoppedForToday(trainNumber)) {
+                TrainTrackerForegroundService.startService(
+                    context = context,
+                    trainNumber = trainNumber,
+                    stationId = stationId
+                )
+            }
         }
         LiveTrainScheduler.scheduleAlarmsAndCheckActiveTrains(context)
     }
@@ -101,8 +105,11 @@ object LiveTrainScheduler {
     /**
      * Verifica se un treno è nella sua finestra di viaggio attuale (da 15 min prima della partenza a fine corsa).
      */
-    fun isTrainInActiveWindow(config: LiveTrainConfig): Boolean {
+    fun isTrainInActiveWindow(config: LiveTrainConfig, context: Context): Boolean {
         if (!config.isEnabled || config.daysOfWeek.isEmpty()) return false
+
+        val liveManager = LiveTrainManager(context)
+        if (liveManager.isStoppedForToday(config.trainNumber)) return false
 
         val (hour, minute) = parseDepartureTime(config.scheduledDepartureTime) ?: return true
         val now = Calendar.getInstance()
@@ -126,7 +133,7 @@ object LiveTrainScheduler {
 
     /**
      * Programma gli allarmi esatti con AlarmManager ed avvia il tracciamento
-     * SOLO per i treni che sono attualmente nella loro finestra di partenza odierna.
+     * SOLO per i treni che sono attualmente nella loro finestra di partenza odierna e NON interrotti dall'utente.
      */
     fun scheduleAlarmsAndCheckActiveTrains(context: Context) {
         val manager = LiveTrainManager(context)
@@ -134,8 +141,8 @@ object LiveTrainScheduler {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
 
         liveTrains.filter { it.isEnabled }.forEach { config ->
-            // 1. Se il treno è nella sua finestra di viaggio odierna, avvia subito il tracciamento
-            if (isTrainInActiveWindow(config)) {
+            // 1. Se il treno è nella sua finestra di viaggio odierna e non è stato interrotto oggi, avvia subito il tracciamento
+            if (isTrainInActiveWindow(config, context)) {
                 Log.d("LiveTrainScheduler", "Treno ${config.trainNumber} nella finestra attiva: avvio servizio tracciamento.")
                 TrainTrackerForegroundService.startService(
                     context = context,

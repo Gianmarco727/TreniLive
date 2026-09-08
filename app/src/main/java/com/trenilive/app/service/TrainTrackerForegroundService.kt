@@ -137,6 +137,9 @@ class TrainTrackerForegroundService : Service() {
     }
 
     private fun startTrackingTrain(trainNumber: String, stationId: String?, timestamp: String?) {
+        // Quando il tracciamento si avvia esplicitamente, azzeriamo l'eventuale flag di stop manuale per oggi
+        LiveTrainManager(this).setStoppedForToday(trainNumber, false)
+
         // Se il treno era già tracciato, ferma il vecchio job
         trackedTrains[trainNumber]?.job?.cancel()
 
@@ -535,6 +538,8 @@ class TrainTrackerForegroundService : Service() {
     }
 
     private fun stopTrackingForTrain(trainNum: String) {
+        LiveTrainManager(this).setStoppedForToday(trainNum, true)
+
         val info = trackedTrains.remove(trainNum)
         info?.job?.cancel()
 
@@ -551,7 +556,9 @@ class TrainTrackerForegroundService : Service() {
     }
 
     private fun stopAllTracking() {
+        val liveManager = LiveTrainManager(this)
         trackedTrains.forEach { (num, info) ->
+            liveManager.setStoppedForToday(num, true)
             info.job.cancel()
             val notifId = getNotificationIdForTrain(num)
             try {
