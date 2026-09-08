@@ -512,6 +512,7 @@ object ViaggiaTrenoService {
 
     /**
      * Cerca i treni e le soluzioni con o senza cambi tra una stazione di partenza e una di arrivo.
+     * Versione ultra-ottimizzata con chiamate asincrone in parallelo e filtri veloci.
      */
     suspend fun fetchRouteSolutionsWithTransfers(
         originStationId: String,
@@ -544,7 +545,7 @@ object ViaggiaTrenoService {
 
             val cleanOriginId = originStationId.removePrefix("S").removePrefix("s")
 
-            while (solutions.size < minSolutions && attempts < 6) {
+            while (solutions.size < minSolutions && attempts < 4) {
                 val departuresRes = fetchStationDepartures(originStationId, currentSearchDate)
                 if (departuresRes is ViaggiaTrenoResult.Error) {
                     if (solutions.isNotEmpty()) break
@@ -552,23 +553,34 @@ object ViaggiaTrenoService {
                 }
 
                 val rawDepartures = (departuresRes as ViaggiaTrenoResult.Success).data
+                if (rawDepartures.isEmpty()) {
+                    currentSearchDate = Date(currentSearchDate.time + 60 * 60 * 1000L)
+                    attempts++
+                    continue
+                }
 
-                for (dep in rawDepartures) {
-                    val statusRes = if (isSameDay(currentSearchDate, Date())) {
-                        resolveTrain(dep.trainNumber).let { resolve ->
-                            if (resolve is ViaggiaTrenoResult.Success) {
-                                fetchTrainStatus(resolve.data.first, resolve.data.second, resolve.data.third)
-                            } else null
+                // 1. RECUPERA LO STATO DEI TRENI DI PARTENZA IN PARALLELO (Async Coroutines)
+                val departuresWithStatus = rawDepartures.take(15).map { dep ->
+                    async {
+                        val statusRes = if (isSameDay(currentSearchDate, Date())) {
+                            resolveTrain(dep.trainNumber).let { resolve ->
+                                if (resolve is ViaggiaTrenoResult.Success) {
+                                    fetchTrainStatus(resolve.data.first, resolve.data.second, resolve.data.third)
+                                } else null
+                            }
+                        } else {
+                            fetchTrainStatusForDeparture(dep.trainNumber, originStationId, dep.departureTimestampMs)
                         }
-                    } else {
-                        fetchTrainStatusForDeparture(dep.trainNumber, originStationId, dep.departureTimestampMs)
-                    }
 
-                    val status = (statusRes as? ViaggiaTrenoResult.Success)?.data ?: continue
+                        val status = (statusRes as? ViaggiaTrenoResult.Success)?.data
+                        if (status != null) Pair(dep, status) else null
+                    }
+                }.awaitAll().filterNotNull()
+
+                for ((dep, status) in departuresWithStatus) {
                     val stops = status.stops
                     if (stops.isEmpty()) continue
 
-                    // Cerca la stazione di salita
                     val originIdx = stops.indexOfFirst { stop ->
                         val stopIdClean = stop.stationId.removePrefix("S").removePrefix("s")
                         stopIdClean == cleanOriginId ||
@@ -578,12 +590,11 @@ object ViaggiaTrenoService {
 
                     val boardingStop = stops[originIdx]
 
-                    // Se per oggi, controlla che la salita non sia già passata o treno soppresso
                     if (isSameDay(currentSearchDate, Date())) {
                         if (status.isCancelled || status.progressPercentage >= 100 || boardingStop.isPassed) continue
                     }
 
-                    // CASE 1: VERIFICA SE È UN TRENO DIRETTO PER LA DESTINAZIONE
+                    // CASE 1: TRENO DIRETTO
                     val destIdx = stops.indexOfFirst { stop ->
                         if (destStationId.isNotBlank()) {
                             stop.stationId.removePrefix("S").removePrefix("s") == destStationId.removePrefix("S").removePrefix("s") ||
@@ -639,9 +650,9 @@ object ViaggiaTrenoService {
                                 )
                             )
                         }
-                    } else {
-                        // CASE 2: RICERCA CON CAMBIO (1 CAMBIO / 2 TRENI) TRAMITE STAZIONI DI SNODO
-                        val candidateJunctionStops = stops.drop(originIdx + 1)
+                    } else if (solutions.size < minSolutions) {
+                        // CASE 2: RICERCA CON CAMBIO (SOLO SU PRINCIPALI STAZIONI DI SNODO)
+                        val candidateJunctionStops = stops.drop(originIdx + 1).take(5)
 
                         for (junctionStop in candidateJunctionStops) {
                             val leg1ArrMs = junctionStop.actualOrEstimatedTimeMs ?: junctionStop.scheduledTimeMs ?: continue
@@ -651,20 +662,28 @@ object ViaggiaTrenoService {
                             val leg2DeparturesRes = fetchStationDepartures(junctionStationId, transferDate)
                             if (leg2DeparturesRes !is ViaggiaTrenoResult.Success) continue
 
-                            for (leg2Dep in leg2DeparturesRes.data.take(15)) {
-                                if (leg2Dep.trainNumber == dep.trainNumber) continue
+                            val candidateLeg2Departures = leg2DeparturesRes.data.take(8)
 
-                                val leg2StatusRes = if (isSameDay(transferDate, Date())) {
-                                    resolveTrain(leg2Dep.trainNumber).let { resolve ->
-                                        if (resolve is ViaggiaTrenoResult.Success) {
-                                            fetchTrainStatus(resolve.data.first, resolve.data.second, resolve.data.third)
-                                        } else null
+                            val leg2DeparturesWithStatus = candidateLeg2Departures.map { leg2Dep ->
+                                async {
+                                    if (leg2Dep.trainNumber == dep.trainNumber) return@async null
+
+                                    val leg2StatusRes = if (isSameDay(transferDate, Date())) {
+                                        resolveTrain(leg2Dep.trainNumber).let { resolve ->
+                                            if (resolve is ViaggiaTrenoResult.Success) {
+                                                fetchTrainStatus(resolve.data.first, resolve.data.second, resolve.data.third)
+                                            } else null
+                                        }
+                                    } else {
+                                        fetchTrainStatusForDeparture(leg2Dep.trainNumber, junctionStationId, leg2Dep.departureTimestampMs)
                                     }
-                                } else {
-                                    fetchTrainStatusForDeparture(leg2Dep.trainNumber, junctionStationId, leg2Dep.departureTimestampMs)
-                                }
 
-                                val leg2Status = (leg2StatusRes as? ViaggiaTrenoResult.Success)?.data ?: continue
+                                    val leg2Status = (leg2StatusRes as? ViaggiaTrenoResult.Success)?.data
+                                    if (leg2Status != null) Pair(leg2Dep, leg2Status) else null
+                                }
+                            }.awaitAll().filterNotNull()
+
+                            for ((leg2Dep, leg2Status) in leg2DeparturesWithStatus) {
                                 val leg2Stops = leg2Status.stops
                                 if (leg2Stops.isEmpty()) continue
 
@@ -755,6 +774,7 @@ object ViaggiaTrenoService {
                                     }
                                 }
                             }
+                            if (solutions.size >= minSolutions) break
                         }
                     }
                 }
