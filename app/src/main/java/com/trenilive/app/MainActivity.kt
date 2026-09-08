@@ -121,7 +121,6 @@ fun MainTabScreen(modifier: Modifier = Modifier) {
             )
         }
 
-        // Mantiene sia TrainTrackerScreen che LiveTrackerScreen sempre attivi in memoria con zIndex per garantire la gerarchia dei tocchi
         Box(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
@@ -164,7 +163,6 @@ fun TrainTrackerScreen(
     var trainNumberInput by rememberSaveable { mutableStateOf("") }
     var favoriteToRemove by remember { mutableStateOf<String?>(null) }
 
-    // Campi stazioni per la ricerca gestiti con TextFieldValue e Saver per preservare lo stato tra schede
     var originQuery by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     var selectedOriginStation by remember { mutableStateOf<StationInfo?>(null) }
     var originSuggestions by remember { mutableStateOf<List<StationInfo>>(emptyList()) }
@@ -173,16 +171,13 @@ fun TrainTrackerScreen(
     var selectedDestinationStation by remember { mutableStateOf<StationInfo?>(null) }
     var destinationSuggestions by remember { mutableStateOf<List<StationInfo>>(emptyList()) }
 
-    // Data e Ora selezionate (in millisecondi)
     var selectedDateMs by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
 
-    // Stati di caricamento e risultati
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var trainStatus by remember { mutableStateOf<TrainStatus?>(null) }
     var routeSolutions by remember { mutableStateOf<List<RouteSolution>>(emptyList()) }
 
-    // Caching e stato per la card soluzione attualmente espansa
     var expandedSolutionId by remember { mutableStateOf<String?>(null) }
 
     val scrollState = rememberScrollState()
@@ -191,7 +186,6 @@ fun TrainTrackerScreen(
 
     var previousSuggestionsCount by remember { mutableIntStateOf(0) }
 
-    // Quando compaiono i suggerimenti, effettua un piccolo scroll controllato
     LaunchedEffect(originSuggestions, destinationSuggestions) {
         val currentCount = originSuggestions.size + destinationSuggestions.size
         if (currentCount > 0 && previousSuggestionsCount == 0) {
@@ -202,7 +196,6 @@ fun TrainTrackerScreen(
         previousSuggestionsCount = currentCount
     }
 
-    // Dialog di conferma rimozione dai preferiti tramite pressione prolungata
     favoriteToRemove?.let { trainNum ->
         AlertDialog(
             onDismissRequest = { favoriteToRemove = null },
@@ -228,7 +221,6 @@ fun TrainTrackerScreen(
         )
     }
 
-    // Funzione ricerca diretta per numero di treno
     val searchByTrainNumber = { numberToSearch: String ->
         focusManager.clearFocus()
         val trimmed = numberToSearch.trim()
@@ -258,7 +250,6 @@ fun TrainTrackerScreen(
         }
     }
 
-    // Funzione ricerca soluzioni per stazione e orario (supportando diretti e cambi)
     val searchByStations = {
         focusManager.clearFocus()
         val originName = originQuery.text.trim()
@@ -319,7 +310,6 @@ fun TrainTrackerScreen(
         }
     }
 
-    // Picker Data e Ora
     val showDatePicker = {
         val cal = Calendar.getInstance().apply { timeInMillis = selectedDateMs }
         DatePickerDialog(
@@ -361,7 +351,6 @@ fun TrainTrackerScreen(
             .padding(20.dp),
         horizontalAlignment = Alignment.Start
     ) {
-        // Header
         Text(
             text = "TreniLive",
             fontSize = 28.sp,
@@ -375,7 +364,6 @@ fun TrainTrackerScreen(
             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
         )
 
-        // BARRA PREFERITI SALVATI
         if (favoriteList.isNotEmpty()) {
             Row(
                 modifier = Modifier
@@ -442,7 +430,6 @@ fun TrainTrackerScreen(
             }
         }
 
-        // BARRA RICERCHES RECENTI
         if (recentSearches.isNotEmpty()) {
             Text(
                 text = "RICERCHE RECENTI",
@@ -502,7 +489,6 @@ fun TrainTrackerScreen(
             }
         }
 
-        // CARD DI RICERCA UNIFICATA
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
@@ -513,7 +499,6 @@ fun TrainTrackerScreen(
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
 
-                // Opzione 1: Ricerca per Numero Treno
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -593,7 +578,6 @@ fun TrainTrackerScreen(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 18.dp))
 
-                // Opzione 2: Ricerca per Stazioni e Tratta
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -622,7 +606,6 @@ fun TrainTrackerScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Stazione Partenza
                 OutlinedTextField(
                     value = originQuery,
                     onValueChange = { tfv ->
@@ -699,7 +682,6 @@ fun TrainTrackerScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Stazione Arrivo
                 OutlinedTextField(
                     value = destinationQuery,
                     onValueChange = { tfv ->
@@ -776,7 +758,6 @@ fun TrainTrackerScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Selezione Data & Ora
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -872,7 +853,6 @@ fun TrainTrackerScreen(
             }
         }
 
-        // SCHEDA DETTAGLIO TRENO SELEZIONATO IN TEMPO REALE (PER RICERCA NUMERO TRENO)
         AnimatedVisibility(
             visible = trainStatus != null && !isLoading,
             enter = fadeIn(),
@@ -897,7 +877,7 @@ fun TrainTrackerScreen(
             }
         }
 
-        // LISTA SOLUZIONI TROVATE (CON SUPPORTO COMPLETO A TRENI DIRETTI E SOLUZIONI CON CAMBI)
+        // LISTA SOLUZIONI TROVATE (PUNTO 1: DESIGN COERENTE E PULITO PER SOLUZIONI DIRETTE ED ESPANDIBILE PER CAMBI)
         if (routeSolutions.isNotEmpty() && !isLoading) {
             Spacer(modifier = Modifier.height(20.dp))
             Text(
@@ -909,193 +889,323 @@ fun TrainTrackerScreen(
             )
 
             routeSolutions.forEach { solution ->
+                val isDirect = solution.numberOfTransfers == 0
+                val singleLeg = solution.legs.firstOrNull()
                 val isExpanded = expandedSolutionId == solution.id
 
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp)
-                        .clickable {
-                            expandedSolutionId = if (isExpanded) null else solution.id
-                        },
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isExpanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface
-                    ),
-                    border = if (isExpanded) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(
+                if (isDirect && singleLeg != null) {
+                    // SCHEDA DESIGN PULITO E COERENTE PER TRENO DIRETTO (0 CAMBI)
+                    Card(
                         modifier = Modifier
-                            .padding(16.dp)
-                            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Text(
-                                        text = "${solution.departureTimeFormatted} ➔ ${solution.arrivalTimeFormatted}",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 18.sp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-
-                                    // Badge Cambi / Diretto
-                                    Surface(
-                                        color = if (solution.numberOfTransfers == 0) Color(0xFF2E7D32).copy(alpha = 0.15f) else Color(0xFFE65100).copy(alpha = 0.15f),
-                                        shape = RoundedCornerShape(12.dp)
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Text(
-                                            text = if (solution.numberOfTransfers == 0) "Diretto" else "${solution.numberOfTransfers} Cambio",
-                                            color = if (solution.numberOfTransfers == 0) Color(0xFF2E7D32) else Color(0xFFE65100),
+                                            text = "${singleLeg.category} ${singleLeg.trainNumber}",
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                            fontSize = 18.sp,
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
-                                    }
-                                }
 
-                                Text(
-                                    text = if (solution.numberOfTransfers == 0) {
-                                        "Treno ${solution.legs.firstOrNull()?.trainNumber ?: ""}"
-                                    } else {
-                                        "Treni: ${solution.legs.joinToString(" + ") { "${it.category} ${it.trainNumber}" }}"
-                                    },
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                )
-
-                                Text(
-                                    text = "Durata: ${solution.totalDurationFormatted} • ${solution.originStationName} ➔ ${solution.destinationStationName}",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                )
-                            }
-                        }
-
-                        // VISTA ESPANSA DELLE TRATTE COMPONENTI
-                        AnimatedVisibility(
-                            visible = isExpanded,
-                            enter = fadeIn(),
-                            exit = fadeOut()
-                        ) {
-                            Column(modifier = Modifier.padding(top = 12.dp)) {
-                                HorizontalDivider(modifier = Modifier.padding(bottom = 12.dp))
-
-                                solution.legs.forEachIndexed { idx, leg ->
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(bottom = 8.dp)
-                                    ) {
-                                        Column(modifier = Modifier.padding(12.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "Tratta ${idx + 1}: ${leg.category} ${leg.trainNumber}",
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 14.sp,
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                                leg.platform?.let { plat ->
-                                                    Text(
-                                                        text = "Binario $plat",
-                                                        fontSize = 12.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = Color(0xFF2E7D32)
-                                                    )
-                                                }
-                                            }
-
-                                            Text(
-                                                text = "${leg.originStationName} (${leg.departureTimeFormatted}) ➔ ${leg.destinationStationName} (${leg.arrivalTimeFormatted})",
-                                                fontSize = 12.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(top = 2.dp)
-                                            )
-                                        }
-                                    }
-
-                                    if (idx < solution.legs.size - 1) {
-                                        val nextLeg = solution.legs[idx + 1]
-                                        val waitMin = ((nextLeg.departureTimestampMs - leg.arrivalTimestampMs) / (1000 * 60)).coerceAtLeast(0)
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(vertical = 4.dp, horizontal = 8.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        Surface(
+                                            color = Color(0xFF2E7D32).copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(12.dp)
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.TransferWithinAStation,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.secondary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
                                             Text(
-                                                text = "Cambio a ${leg.destinationStationName} • Attesa coincidenza: $waitMin min",
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.secondary
+                                                text = "Diretto",
+                                                color = Color(0xFF2E7D32),
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                             )
                                         }
                                     }
-                                }
 
-                                Spacer(modifier = Modifier.height(10.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
 
-                                Button(
-                                    onClick = {
-                                        coroutineScope.launch {
-                                            programRouteSolutionInLiveTracker(
-                                                solution = solution,
-                                                context = context,
-                                                onComplete = {
-                                                    onSwitchToLiveTracker()
-                                                }
-                                            )
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Bolt,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                            modifier = Modifier.size(16.dp)
+                                        Text(
+                                            text = "${solution.departureTimeFormatted} ➔ ${solution.arrivalTimeFormatted}",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                         Text(
-                                            text = if (solution.numberOfTransfers == 0) "Programma nel Live Tracker" else "Programma Soluzione con Cambio nel Tracker",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimary
+                                            text = "• Durata ${solution.totalDurationFormatted}",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                    }
+
+                                    Text(
+                                        text = "${solution.originStationName} ➔ ${solution.destinationStationName}",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
+
+                                singleLeg.platform?.let { plat ->
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text(
+                                            text = "Binario $plat",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF2E7D32),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Button(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        programRouteSolutionInLiveTracker(
+                                            solution = solution,
+                                            context = context,
+                                            onComplete = {
+                                                onSwitchToLiveTracker()
+                                            }
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Bolt,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Programma Treno Diretto nel Tracker",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // SCHEDA ESPANDIBILE PER SOLUZIONE CON CAMBI (1+ CAMBI)
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                            .clickable {
+                                expandedSolutionId = if (isExpanded) null else solution.id
+                            },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isExpanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface
+                        ),
+                        border = if (isExpanded) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "${solution.departureTimeFormatted} ➔ ${solution.arrivalTimeFormatted}",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 18.sp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+
+                                        Surface(
+                                            color = Color(0xFFE65100).copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text(
+                                                text = "${solution.numberOfTransfers} Cambio",
+                                                color = Color(0xFFE65100),
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Text(
+                                        text = "Treni: ${solution.legs.joinToString(" + ") { "${it.category} ${it.trainNumber}" }}",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+
+                                    Text(
+                                        text = "Durata: ${solution.totalDurationFormatted} • ${solution.originStationName} ➔ ${solution.destinationStationName}",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
+                            }
+
+                            // VISTA ESPANSA DELLE TRATTE COMPONENTI
+                            AnimatedVisibility(
+                                visible = isExpanded,
+                                enter = fadeIn(),
+                                exit = fadeOut()
+                            ) {
+                                Column(modifier = Modifier.padding(top = 12.dp)) {
+                                    HorizontalDivider(modifier = Modifier.padding(bottom = 12.dp))
+
+                                    solution.legs.forEachIndexed { idx, leg ->
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 8.dp)
+                                        ) {
+                                            Column(modifier = Modifier.padding(12.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = "Tratta ${idx + 1}: ${leg.category} ${leg.trainNumber}",
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 14.sp,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    leg.platform?.let { plat ->
+                                                        Text(
+                                                            text = "Binario $plat",
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color(0xFF2E7D32)
+                                                        )
+                                                    }
+                                                }
+
+                                                Text(
+                                                    text = "${leg.originStationName} (${leg.departureTimeFormatted}) ➔ ${leg.destinationStationName} (${leg.arrivalTimeFormatted})",
+                                                    fontSize = 12.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.padding(top = 2.dp)
+                                                )
+                                            }
+                                        }
+
+                                        if (idx < solution.legs.size - 1) {
+                                            val nextLeg = solution.legs[idx + 1]
+                                            val waitMin = ((nextLeg.departureTimestampMs - leg.arrivalTimestampMs) / (1000 * 60)).coerceAtLeast(0)
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp, horizontal = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.TransferWithinAStation,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.secondary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Text(
+                                                    text = "Cambio a ${leg.destinationStationName} • Attesa coincidenza: $waitMin min",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.secondary
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    Button(
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                programRouteSolutionInLiveTracker(
+                                                    solution = solution,
+                                                    context = context,
+                                                    onComplete = {
+                                                        onSwitchToLiveTracker()
+                                                    }
+                                                )
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Bolt,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = "Programma Soluzione con Cambio nel Tracker",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimary
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1708,36 +1818,42 @@ fun LiveTrackerScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        // PUNTO 2: Layout con spaziature corrette per evitare lo schiacciamento del badge contro lo Switch
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Text(
-                                        text = if (effLegs.size > 1) "Soluzione ${config.getDisplayTrainNumbers()}" else "Treno ${config.trainNumber}",
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    if (effLegs.size > 1) {
-                                        Surface(
-                                            color = Color(0xFFE65100).copy(alpha = 0.15f),
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
-                                            Text(
-                                                text = "${effLegs.size - 1} Cambio",
-                                                color = Color(0xFFE65100),
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 10.sp,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 12.dp)
+                            ) {
+                                Text(
+                                    text = if (effLegs.size > 1) "Soluzione ${config.getDisplayTrainNumbers()}" else "Treno ${config.trainNumber}",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+
+                                if (effLegs.size > 1) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Surface(
+                                        color = Color(0xFFE65100).copy(alpha = 0.15f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text(
+                                            text = "${effLegs.size - 1} Cambio",
+                                            color = Color(0xFFE65100),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        )
                                     }
                                 }
+
+                                Spacer(modifier = Modifier.height(4.dp))
 
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -2285,7 +2401,6 @@ fun TrainStatusCard(
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
 
-            // 1. RIGA SUPERIORE: Badge Ritardo + Pulsante Chiudi
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -2327,7 +2442,6 @@ fun TrainStatusCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 2. RIGA DEDICATA: Nome Categoria e Numero Treno + Cuore Preferiti
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -2358,7 +2472,6 @@ fun TrainStatusCard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // 3. RIGA DEDICATA: Stazione Partenza ➔ Stazione Arrivo
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
