@@ -877,7 +877,7 @@ fun TrainTrackerScreen(
             }
         }
 
-        // LISTA SOLUZIONI TROVATE (PUNTO 1: DESIGN COERENTE E PULITO PER SOLUZIONI DIRETTE ED ESPANDIBILE PER CAMBI)
+        // LISTA SOLUZIONI TROVATE (ESPANSIBILI CON PULSANTE PROGRAMMAZIONE SOLO AD ESPANSIONE)
         if (routeSolutions.isNotEmpty() && !isLoading) {
             Spacer(modifier = Modifier.height(20.dp))
             Text(
@@ -893,216 +893,145 @@ fun TrainTrackerScreen(
                 val singleLeg = solution.legs.firstOrNull()
                 val isExpanded = expandedSolutionId == solution.id
 
-                if (isDirect && singleLeg != null) {
-                    // SCHEDA DESIGN PULITO E COERENTE PER TRENO DIRETTO (0 CAMBI)
-                    Card(
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .clickable {
+                            expandedSolutionId = if (isExpanded) null else solution.id
+                        },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isExpanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface
+                    ),
+                    border = if (isExpanded) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            .padding(16.dp)
+                            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Text(
-                                            text = "${singleLeg.category} ${singleLeg.trainNumber}",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 18.sp,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-
-                                        Surface(
-                                            color = Color(0xFF2E7D32).copy(alpha = 0.15f),
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
-                                            Text(
-                                                text = "Diretto",
-                                                color = Color(0xFF2E7D32),
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 11.sp,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(4.dp))
-
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Text(
-                                            text = "${solution.departureTimeFormatted} ➔ ${solution.arrivalTimeFormatted}",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 16.sp,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                        Text(
-                                            text = "• Durata ${solution.totalDurationFormatted}",
-                                            fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-
-                                    Text(
-                                        text = "${solution.originStationName} ➔ ${solution.destinationStationName}",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.padding(top = 2.dp)
-                                    )
-                                }
-
-                                singleLeg.platform?.let { plat ->
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.surfaceVariant,
-                                        shape = RoundedCornerShape(10.dp)
-                                    ) {
-                                        Text(
-                                            text = "Binario $plat",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF2E7D32),
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                        )
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Button(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        programRouteSolutionInLiveTracker(
-                                            solution = solution,
-                                            context = context,
-                                            onComplete = {
-                                                onSwitchToLiveTracker()
-                                            }
-                                        )
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                )
-                            ) {
+                        // INTESTAZIONE CARD (SIA DIRETTI CHE CAMBI)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Bolt,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
                                     Text(
-                                        text = "Programma Treno Diretto nel Tracker",
-                                        fontSize = 13.sp,
+                                        text = "${solution.departureTimeFormatted} ➔ ${solution.arrivalTimeFormatted}",
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimary
+                                        fontSize = 18.sp,
+                                        color = MaterialTheme.colorScheme.primary
                                     )
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // SCHEDA ESPANDIBILE PER SOLUZIONE CON CAMBI (1+ CAMBI)
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp)
-                            .clickable {
-                                expandedSolutionId = if (isExpanded) null else solution.id
-                            },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isExpanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface
-                        ),
-                        border = if (isExpanded) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+
+                                    // Badge Cambi / Diretto
+                                    Surface(
+                                        color = if (isDirect) Color(0xFF2E7D32).copy(alpha = 0.15f) else Color(0xFFE65100).copy(alpha = 0.15f),
+                                        shape = RoundedCornerShape(12.dp)
                                     ) {
                                         Text(
-                                            text = "${solution.departureTimeFormatted} ➔ ${solution.arrivalTimeFormatted}",
+                                            text = if (isDirect) "Diretto" else "${solution.numberOfTransfers} Cambio",
+                                            color = if (isDirect) Color(0xFF2E7D32) else Color(0xFFE65100),
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 18.sp,
-                                            color = MaterialTheme.colorScheme.primary
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                         )
+                                    }
+                                }
 
-                                        Surface(
-                                            color = Color(0xFFE65100).copy(alpha = 0.15f),
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
+                                Text(
+                                    text = if (isDirect && singleLeg != null) {
+                                        "${singleLeg.category} ${singleLeg.trainNumber}"
+                                    } else {
+                                        "Treni: ${solution.legs.joinToString(" + ") { "${it.category} ${it.trainNumber}" }}"
+                                    },
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+
+                                Text(
+                                    text = "Durata: ${solution.totalDurationFormatted} • ${solution.originStationName} ➔ ${solution.destinationStationName}",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
+
+                        // VISTA ESPANSA DELLE TRATTE COMPONENTI E DEL PULSANTE PROGRAMMAZIONE (SOLO SE ESPANSO)
+                        AnimatedVisibility(
+                            visible = isExpanded,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Column(modifier = Modifier.padding(top = 12.dp)) {
+                                HorizontalDivider(modifier = Modifier.padding(bottom = 12.dp))
+
+                                if (isDirect && singleLeg != null) {
+                                    // DETTAGLI COMPLETI PER TRENO DIRETTO
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        shape = RoundedCornerShape(14.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 12.dp)
+                                    ) {
+                                        Column(modifier = Modifier.padding(14.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "${singleLeg.category} ${singleLeg.trainNumber}",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 16.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+
+                                                singleLeg.platform?.let { plat ->
+                                                    Surface(
+                                                        color = Color(0xFF2E7D32).copy(alpha = 0.15f),
+                                                        shape = RoundedCornerShape(8.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "Binario $plat",
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color(0xFF2E7D32),
+                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(6.dp))
+
                                             Text(
-                                                text = "${solution.numberOfTransfers} Cambio",
-                                                color = Color(0xFFE65100),
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 11.sp,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                                text = "Partenza: ${singleLeg.originStationName} (${singleLeg.departureTimeFormatted})",
+                                                fontSize = 13.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = "Arrivo: ${singleLeg.destinationStationName} (${singleLeg.arrivalTimeFormatted})",
+                                                fontSize = 13.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(top = 2.dp)
                                             )
                                         }
                                     }
-
-                                    Text(
-                                        text = "Treni: ${solution.legs.joinToString(" + ") { "${it.category} ${it.trainNumber}" }}",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.padding(top = 2.dp)
-                                    )
-
-                                    Text(
-                                        text = "Durata: ${solution.totalDurationFormatted} • ${solution.originStationName} ➔ ${solution.destinationStationName}",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.padding(top = 2.dp)
-                                    )
-                                }
-                            }
-
-                            // VISTA ESPANSA DELLE TRATTE COMPONENTI
-                            AnimatedVisibility(
-                                visible = isExpanded,
-                                enter = fadeIn(),
-                                exit = fadeOut()
-                            ) {
-                                Column(modifier = Modifier.padding(top = 12.dp)) {
-                                    HorizontalDivider(modifier = Modifier.padding(bottom = 12.dp))
-
+                                } else {
+                                    // DETTAGLI PER SOLUZIONE CON CAMBI (1+ CAMBI)
                                     solution.legs.forEachIndexed { idx, leg ->
                                         Surface(
                                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -1167,45 +1096,46 @@ fun TrainTrackerScreen(
                                             }
                                         }
                                     }
+                                }
 
-                                    Spacer(modifier = Modifier.height(10.dp))
+                                Spacer(modifier = Modifier.height(10.dp))
 
-                                    Button(
-                                        onClick = {
-                                            coroutineScope.launch {
-                                                programRouteSolutionInLiveTracker(
-                                                    solution = solution,
-                                                    context = context,
-                                                    onComplete = {
-                                                        onSwitchToLiveTracker()
-                                                    }
-                                                )
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary,
-                                            contentColor = MaterialTheme.colorScheme.onPrimary
-                                        )
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Bolt,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onPrimary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Text(
-                                                text = "Programma Soluzione con Cambio nel Tracker",
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onPrimary
+                                // PULSANTE PROGRAMMAZIONE NEL TRACKER (MOSTRATO SOLO SE ESPANSO)
+                                Button(
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            programRouteSolutionInLiveTracker(
+                                                solution = solution,
+                                                context = context,
+                                                onComplete = {
+                                                    onSwitchToLiveTracker()
+                                                }
                                             )
                                         }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Bolt,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = if (isDirect) "Programma Treno Diretto nel Tracker" else "Programma Soluzione con Cambio nel Tracker",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimary
+                                        )
                                     }
                                 }
                             }
@@ -1818,7 +1748,6 @@ fun LiveTrackerScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        // PUNTO 2: Layout con spaziature corrette per evitare lo schiacciamento del badge contro lo Switch
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1922,7 +1851,6 @@ fun LiveTrackerScreen(
                             )
                         }
 
-                        // MOSTRA I DETTAGLI DELLE SINGOLE TRATTE PER SOLUZIONI CON CAMBI
                         if (effLegs.size > 1) {
                             HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
                             Text(
@@ -2046,7 +1974,6 @@ fun LiveTrackerScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // SEZIONE OPZIONI SVILUPPATORE / DEBUG
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
