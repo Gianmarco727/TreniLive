@@ -43,7 +43,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -877,7 +879,7 @@ fun TrainTrackerScreen(
             }
         }
 
-        // LISTA SOLUZIONI TROVATE (CON SENTENCE CASE SUI TITOLI E DICITURA SEMPLIFICATA "Programma nel Tracker")
+        // LISTA SOLUZIONI TROVATE (CON BARRA DI PROGRESSO E DETTAGLI MATERIAL 3 COMPLETI SULLE SCHEDE DIRETTE ESPANSE)
         if (routeSolutions.isNotEmpty() && !isLoading) {
             Spacer(modifier = Modifier.height(20.dp))
             Text(
@@ -968,7 +970,7 @@ fun TrainTrackerScreen(
                             }
                         }
 
-                        // VISTA ESPANSA DELLA CARD (DETTAGLI IN TEMPO REALE COMPLETI)
+                        // VISTA ESPANSA DELLA CARD (DETTAGLI IN TEMPO REALE COMPLETI MATERIAL 3)
                         AnimatedVisibility(
                             visible = isExpanded,
                             enter = fadeIn(),
@@ -1081,7 +1083,7 @@ fun TrainTrackerScreen(
                                             Spacer(modifier = Modifier.height(10.dp))
                                         }
 
-                                        // 4. BARRA DI PROGRESSO AVANZAMENTO TRENO
+                                        // 4. BARRA DI PROGRESSO MATERIAL 3 AVANZAMENTO TRENO (PILL SHAPE 100% M3)
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween
@@ -1103,10 +1105,12 @@ fun TrainTrackerScreen(
                                             progress = { legStatus.progressPercentage / 100f },
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(6.dp)
-                                                .padding(top = 4.dp),
+                                                .padding(top = 6.dp)
+                                                .height(10.dp)
+                                                .clip(CircleShape),
                                             color = Color(0xFFC8102E),
-                                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                            trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                            strokeCap = StrokeCap.Round
                                         )
 
                                         Spacer(modifier = Modifier.height(12.dp))
@@ -1271,7 +1275,6 @@ fun TrainTrackerScreen(
 
                                 Spacer(modifier = Modifier.height(10.dp))
 
-                                // PULSANTE PROGRAMMAZIONE NEL TRACKER CON TESTO SEMPLIFICATO "Programma nel Tracker"
                                 Button(
                                     onClick = {
                                         coroutineScope.launch {
@@ -2686,10 +2689,12 @@ fun TrainStatusCard(
                 progress = { status.progressPercentage / 100f },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(8.dp)
-                    .padding(top = 6.dp),
+                    .padding(top = 6.dp)
+                    .height(10.dp)
+                    .clip(CircleShape),
                 color = Color(0xFFC8102E),
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                strokeCap = StrokeCap.Round
             )
 
             if (userBoardingStation.isNotBlank() || userAlightingStation.isNotBlank()) {
