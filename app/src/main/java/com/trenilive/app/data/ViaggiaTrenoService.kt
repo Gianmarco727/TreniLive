@@ -72,13 +72,13 @@ object ViaggiaTrenoService {
 
     private val AUTOCOMPLETE_REGEX = """(\d+)-([A-Z0-9]+)-(\d+)""".toRegex()
 
-    // PUNTO 4: Cache in memoria per l'autocompletamento stazioni (0ms)
+    // Cache in memoria per l'autocompletamento stazioni (0ms)
     private val autocompleteCache = ConcurrentHashMap<String, List<StationInfo>>()
 
     // Cache in memoria per la risoluzione dei treni (0ms)
     private val resolveTrainCache = ConcurrentHashMap<String, Triple<String, String, String>>()
 
-    // PUNTO 3: Cache volatile in memoria per lo stato dei treni (30s TTL)
+    // Cache volatile in memoria per lo stato dei treni (30s TTL)
     private val trainStatusCache = ConcurrentHashMap<String, Pair<Long, TrainStatus>>()
     private const val CACHE_TTL_MS = 30_000L
 
@@ -118,6 +118,29 @@ object ViaggiaTrenoService {
                     norm.contains("VICENZA") || norm.contains("FERRARA") || norm.contains("ROVIGO") -> 2
             else -> 3
         }
+    }
+
+    /**
+     * Verifica prima del download di rete se la destinazione finale dichiarata dal treno
+     * è coerente con la direzione cercata (es. per Bologna esclude treni diretti ad Adria/Udine/Trieste/Bassano).
+     */
+    private fun isDestinationTowardsTarget(trainDestination: String, queryDestination: String): Boolean {
+        val normTrainDest = normalizeStationName(trainDestination)
+        val normQueryDest = normalizeStationName(queryDestination)
+
+        if (normTrainDest.contains(normQueryDest) || normQueryDest.contains(normTrainDest)) return true
+
+        if (normQueryDest.contains("BOLOGNA") || normQueryDest.contains("ROMA") || normQueryDest.contains("FIRENZE") || normQueryDest.contains("NAPOLI")) {
+            val southDestinations = listOf("BOLOGNA", "ROMA", "FIRENZE", "NAPOLI", "SALERNO", "ANCONA", "LECCE", "BARI", "PISA", "LIVORNO", "RIMINI")
+            return southDestinations.any { normTrainDest.contains(it) }
+        }
+
+        if (normQueryDest.contains("PORDENONE") || normQueryDest.contains("UDINE") || normQueryDest.contains("TRIESTE")) {
+            val northEastDestinations = listOf("PORDENONE", "UDINE", "TRIESTE", "GORIZIA", "SACILE")
+            return northEastDestinations.any { normTrainDest.contains(it) }
+        }
+
+        return true
     }
 
     private fun isValidTransferHub(junctionName: String, originName: String, destName: String): Boolean {
@@ -193,10 +216,6 @@ object ViaggiaTrenoService {
         return false
     }
 
-    /**
-     * Risolve il numero del treno con cache in memoria.
-     * Endpoint: cercaNumeroTrenoTrenoAutocomplete/{NUMERO_TRENO}
-     */
     suspend fun resolveTrain(trainNumber: String): ViaggiaTrenoResult<Triple<String, String, String>> =
         withContext(Dispatchers.IO) {
             try {
@@ -344,9 +363,6 @@ object ViaggiaTrenoService {
         }
     }
 
-    /**
-     * Recupera lo stato in tempo reale del treno con cache volatile a 30 secondi.
-     */
     suspend fun fetchTrainStatus(
         trainNumber: String,
         departureStationId: String,
@@ -518,9 +534,6 @@ object ViaggiaTrenoService {
         ViaggiaTrenoResult.Error("Impossibile recuperare i dettagli per il treno $trainNumber.")
     }
 
-    /**
-     * Suggerimento e autocompletamento stazioni da query testuale con cache in memoria.
-     */
     suspend fun autocompleteStation(query: String): ViaggiaTrenoResult<List<StationInfo>> =
         withContext(Dispatchers.IO) {
             try {
@@ -556,10 +569,6 @@ object ViaggiaTrenoService {
             }
         }
 
-    /**
-     * Recupera il tabellone delle partenze per una determinata stazione a partire da una certa data/ora.
-     * Endpoint: partenze/{ID_STAZIONE}/{TIMESTAMP_FORMATTATO}
-     */
     suspend fun fetchStationDepartures(
         stationId: String,
         date: Date = Date()
@@ -640,9 +649,6 @@ object ViaggiaTrenoService {
                 cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
     }
 
-    /**
-     * Helper veloce per recuperare lo stato del treno usando l'ID di origine reale risolto con cache.
-     */
     private suspend fun fetchTrainStatusDirectOrResolve(dep: StationDeparture, searchDate: Date): TrainStatus? {
         val resolve = resolveTrain(dep.trainNumber)
         if (resolve is ViaggiaTrenoResult.Success) {
@@ -716,7 +722,7 @@ object ViaggiaTrenoService {
                     continue
                 }
 
-                val departuresWithStatus = rawDepartures.take(25).map { dep ->
+                val departuresWithStatus = rawDepartures.take(12).map { dep ->
                     async {
                         val status = fetchTrainStatusDirectOrResolve(dep, currentSearchDate)
                         if (status != null) Pair(dep, status) else null
@@ -734,7 +740,6 @@ object ViaggiaTrenoService {
 
                     val boardingStop = stops[originIdx]
 
-                    // Filtra treni soppressi o partiti prima dell'orario cercato dall'utente
                     if (status.isCancelled || status.progressPercentage >= 100) continue
                     val boardMs = boardingStop.scheduledTimeMs ?: 0L
                     if (boardMs < date.time - 5 * 60 * 1000L) continue
@@ -807,7 +812,7 @@ object ViaggiaTrenoService {
             currentSearchDate = date
             attempts = 0
 
-            while (attempts < 4) {
+            while (attempts < 3) {
                 val departuresRes = fetchStationDepartures(originStationId, currentSearchDate)
                 if (departuresRes is ViaggiaTrenoResult.Error) {
                     if (transferSolutions.isNotEmpty()) break
@@ -821,7 +826,8 @@ object ViaggiaTrenoService {
                     continue
                 }
 
-                val departuresWithStatus = rawDepartures.take(25).map { dep ->
+                // Prendi solo i primi 12 treni di partenza reali dell'ora
+                val departuresWithStatus = rawDepartures.take(12).map { dep ->
                     async {
                         val status = fetchTrainStatusDirectOrResolve(dep, currentSearchDate)
                         if (status != null) Pair(dep, status) else null
@@ -839,7 +845,6 @@ object ViaggiaTrenoService {
 
                     val boardingStop = stops[originIdx]
 
-                    // Filtra treni soppressi o partiti prima dell'orario cercato dall'utente
                     if (status.isCancelled || status.progressPercentage >= 100) continue
                     val boardMs = boardingStop.scheduledTimeMs ?: 0L
                     if (boardMs < date.time - 5 * 60 * 1000L) continue
@@ -847,7 +852,7 @@ object ViaggiaTrenoService {
                     val candidateJunctionStops = stops.drop(originIdx + 1)
                         .filter { isMajorJunctionStation(it.stationName) && isValidTransferHub(it.stationName, cleanOriginName, cleanDestName) }
                         .sortedBy { getJunctionHubPriority(it.stationName) }
-                        .take(5)
+                        .take(3)
 
                     for (junctionStop in candidateJunctionStops) {
                         val leg1ArrMs = junctionStop.actualOrEstimatedTimeMs ?: junctionStop.scheduledTimeMs ?: continue
@@ -867,10 +872,12 @@ object ViaggiaTrenoService {
                             }
                         }
 
+                        // OTTIMIZZAZIONE FONDAMENTALE: Filtra i treni di Leg 2 per destinazione PRIMA del download via rete!
                         val candidateLeg2Departures = leg2Departures
                             .distinctBy { it.trainNumber }
+                            .filter { isDestinationTowardsTarget(it.destination, cleanDestName) }
                             .sortedBy { it.departureTimestampMs }
-                            .take(30)
+                            .take(10)
 
                         val leg2DeparturesWithStatus = candidateLeg2Departures.map { leg2Dep ->
                             async {
@@ -970,6 +977,8 @@ object ViaggiaTrenoService {
                         }
                     }
                 }
+
+                if (transferSolutions.size >= minSolutions) break
 
                 currentSearchDate = Date(currentSearchDate.time + 60 * 60 * 1000L)
                 attempts++
