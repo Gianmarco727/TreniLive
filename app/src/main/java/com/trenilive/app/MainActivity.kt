@@ -880,6 +880,7 @@ fun TrainTrackerScreen(
             }
         }
 
+        // LISTA SOLUZIONI TROVATE (UNIFORMATO COLORE BLU SFONDO SCHEDA A 0xFF1C2D4F E RIMOSSO PALLINO ROSSO STOP INDICATOR)
         if (routeSolutions.isNotEmpty() && !isLoading) {
             Spacer(modifier = Modifier.height(20.dp))
             Text(
@@ -904,7 +905,7 @@ fun TrainTrackerScreen(
                         },
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (isExpanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface
+                        containerColor = MaterialTheme.colorScheme.surface
                     ),
                     border = if (isExpanded) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -932,6 +933,7 @@ fun TrainTrackerScreen(
                                         color = MaterialTheme.colorScheme.primary
                                     )
 
+                                    // Badge Cambi / Diretto
                                     Surface(
                                         color = if (isDirect) Color(0xFF2E7D32).copy(alpha = 0.15f) else Color(0xFFE65100).copy(alpha = 0.15f),
                                         shape = RoundedCornerShape(12.dp)
@@ -969,7 +971,7 @@ fun TrainTrackerScreen(
                             }
                         }
 
-                        // VISTA ESPANSA DELLA CARD (DETTAGLI IN TEMPO REALE COMPLETI MATERIAL 3)
+                        // VISTA ESPANSA DELLA CARD
                         AnimatedVisibility(
                             visible = isExpanded,
                             enter = fadeIn(),
@@ -1082,7 +1084,7 @@ fun TrainTrackerScreen(
                                             Spacer(modifier = Modifier.height(10.dp))
                                         }
 
-                                        // 4. BARRA DI PROGRESSO MATERIAL 3 AVANZAMENTO TRENO (SENZA PUNTINO ROSSO A 0%)
+                                        // 4. BARRA DI PROGRESSO AVANZAMENTO TRENO (SENZA PALLINO ROSSO STOP INDICATOR M3)
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween
@@ -1110,7 +1112,8 @@ fun TrainTrackerScreen(
                                                     .clip(CircleShape),
                                                 color = Color(0xFFC8102E),
                                                 trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                                                strokeCap = StrokeCap.Round
+                                                strokeCap = StrokeCap.Round,
+                                                drawStopIndicator = {}
                                             )
                                         } else {
                                             Box(
@@ -1125,7 +1128,7 @@ fun TrainTrackerScreen(
 
                                         Spacer(modifier = Modifier.height(12.dp))
 
-                                        // 5. TRATTA SELEZIONATA (CON ORARIO GARANTITO E NON TRONCATO)
+                                        // 5. TRATTA SELEZIONATA (CON ORARIO INTACT)
                                         val stopsCount = legStatus.stops.size
                                         if (stopsCount > 1) {
                                             val boardingIdx = legStatus.stops.indexOfFirst {
@@ -1146,9 +1149,9 @@ fun TrainTrackerScreen(
                                             val alightingPlatform = rawAlightingPlat?.takeIf { !it.equals("null", ignoreCase = true) && it.isNotBlank() }
 
                                             Surface(
-                                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                                                 shape = RoundedCornerShape(14.dp),
-                                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                                                 modifier = Modifier.fillMaxWidth()
                                             ) {
                                                 Column(modifier = Modifier.padding(12.dp)) {
@@ -1156,7 +1159,7 @@ fun TrainTrackerScreen(
                                                         text = "Tratta selezionata",
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.secondary
+                                                        color = MaterialTheme.colorScheme.primary
                                                     )
 
                                                     // SALITA
@@ -1173,13 +1176,13 @@ fun TrainTrackerScreen(
                                                                 text = "Salita: ",
                                                                 fontSize = 12.sp,
                                                                 fontWeight = FontWeight.SemiBold,
-                                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                                color = MaterialTheme.colorScheme.onSurface
                                                             )
                                                             Text(
                                                                 text = boardingStop?.stationName ?: singleLeg.originStationName,
                                                                 fontSize = 12.sp,
                                                                 fontWeight = FontWeight.SemiBold,
-                                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                                color = MaterialTheme.colorScheme.onSurface,
                                                                 maxLines = 1,
                                                                 overflow = TextOverflow.Ellipsis,
                                                                 modifier = Modifier.weight(1f, fill = false)
@@ -1188,7 +1191,7 @@ fun TrainTrackerScreen(
                                                                 text = " (${singleLeg.departureTimeFormatted})",
                                                                 fontSize = 12.sp,
                                                                 fontWeight = FontWeight.SemiBold,
-                                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                                color = MaterialTheme.colorScheme.onSurface,
                                                                 maxLines = 1
                                                             )
                                                         }
@@ -1217,13 +1220,13 @@ fun TrainTrackerScreen(
                                                                 text = "Discesa: ",
                                                                 fontSize = 12.sp,
                                                                 fontWeight = FontWeight.SemiBold,
-                                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                                color = MaterialTheme.colorScheme.onSurface
                                                             )
                                                             Text(
                                                                 text = alightingStop?.stationName ?: singleLeg.destinationStationName,
                                                                 fontSize = 12.sp,
                                                                 fontWeight = FontWeight.SemiBold,
-                                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                                color = MaterialTheme.colorScheme.onSurface,
                                                                 maxLines = 1,
                                                                 overflow = TextOverflow.Ellipsis,
                                                                 modifier = Modifier.weight(1f, fill = false)
@@ -1232,7 +1235,7 @@ fun TrainTrackerScreen(
                                                                 text = " (${singleLeg.arrivalTimeFormatted})",
                                                                 fontSize = 12.sp,
                                                                 fontWeight = FontWeight.SemiBold,
-                                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                                color = MaterialTheme.colorScheme.onSurface,
                                                                 maxLines = 1
                                                             )
                                                         }
@@ -2752,7 +2755,8 @@ fun TrainStatusCard(
                         .clip(CircleShape),
                     color = Color(0xFFC8102E),
                     trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                    strokeCap = StrokeCap.Round
+                    strokeCap = StrokeCap.Round,
+                    drawStopIndicator = {}
                 )
             } else {
                 Box(
