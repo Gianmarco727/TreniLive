@@ -963,8 +963,20 @@ fun TrainTrackerScreen(
                                 }
 
                                 Text(
+                                    text = if (solution.numberOfTransfers == 0) {
+                                        "Treno ${solution.legs.firstOrNull()?.trainNumber ?: ""}"
+                                    } else {
+                                        "Treni: ${solution.legs.joinToString(" + ") { "${it.category} ${it.trainNumber}" }}"
+                                    },
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+
+                                Text(
                                     text = "Durata: ${solution.totalDurationFormatted} • ${solution.originStationName} ➔ ${solution.destinationStationName}",
-                                    fontSize = 13.sp,
+                                    fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
