@@ -87,6 +87,43 @@ class LiveTrainManager(context: Context) {
                     }
                 }
 
+                val legsList = mutableListOf<LiveTrainLeg>()
+                val legsArray = obj.optJSONArray("legs")
+                if (legsArray != null) {
+                    for (l in 0 until legsArray.length()) {
+                        val lObj = legsArray.getJSONObject(l)
+                        val legMonitoredStops = mutableListOf<MonitoredStop>()
+                        val lStopsArray = lObj.optJSONArray("monitoredStops")
+                        if (lStopsArray != null) {
+                            for (m in 0 until lStopsArray.length()) {
+                                val msObj = lStopsArray.getJSONObject(m)
+                                legMonitoredStops.add(
+                                    MonitoredStop(
+                                        stationId = msObj.optString("stationId", ""),
+                                        stationName = msObj.optString("stationName", ""),
+                                        progressPercentage = msObj.optInt("progressPercentage", 0)
+                                    )
+                                )
+                            }
+                        }
+
+                        legsList.add(
+                            LiveTrainLeg(
+                                legIndex = lObj.optInt("legIndex", l),
+                                trainNumber = lObj.optString("trainNumber", ""),
+                                category = lObj.optString("category", "Treno"),
+                                originStationId = lObj.optString("originStationId", ""),
+                                originStationName = lObj.optString("originStationName", ""),
+                                destinationStationId = lObj.optString("destinationStationId", ""),
+                                destinationStationName = lObj.optString("destinationStationName", ""),
+                                scheduledDepartureTime = lObj.optString("scheduledDepartureTime", ""),
+                                scheduledArrivalTime = lObj.optString("scheduledArrivalTime", ""),
+                                monitoredStops = legMonitoredStops
+                            )
+                        )
+                    }
+                }
+
                 if (num.isNotBlank()) {
                     list.add(
                         LiveTrainConfig(
@@ -98,7 +135,8 @@ class LiveTrainManager(context: Context) {
                             destinationStationName = destName,
                             scheduledDepartureTime = time,
                             isEnabled = isEnabled,
-                            monitoredStops = monitoredList
+                            monitoredStops = monitoredList,
+                            legs = legsList
                         )
                     )
                 }
@@ -120,22 +158,26 @@ class LiveTrainManager(context: Context) {
         persistList(currentList)
         // Se salviamo un treno abilitato, azzeriamo l'eventuale flag di stop per oggi
         if (config.isEnabled) {
-            setStoppedForToday(config.trainNumber, false)
+            config.getEffectiveLegs().forEach { leg ->
+                setStoppedForToday(leg.trainNumber, false)
+            }
         }
         return currentList
     }
 
     fun toggleTrainEnabled(id: String): List<LiveTrainConfig> {
-        val currentList = getLiveTrains().map {
-            if (it.id == id || it.trainNumber == id) {
-                val newEnabled = !it.isEnabled
-                if (!newEnabled) {
-                    setStoppedForToday(it.trainNumber, true)
-                } else {
-                    setStoppedForToday(it.trainNumber, false)
+        val currentList = getLiveTrains().map { item ->
+            if (item.id == id || item.trainNumber == id) {
+                val newEnabled = !item.isEnabled
+                item.getEffectiveLegs().forEach { leg ->
+                    if (!newEnabled) {
+                        setStoppedForToday(leg.trainNumber, true)
+                    } else {
+                        setStoppedForToday(leg.trainNumber, false)
+                    }
                 }
-                it.copy(isEnabled = newEnabled)
-            } else it
+                item.copy(isEnabled = newEnabled)
+            } else item
         }
         persistList(currentList)
         return currentList
@@ -144,7 +186,9 @@ class LiveTrainManager(context: Context) {
     fun removeLiveTrain(id: String): List<LiveTrainConfig> {
         val target = getLiveTrains().firstOrNull { it.id == id || it.trainNumber == id }
         if (target != null) {
-            setStoppedForToday(target.trainNumber, true)
+            target.getEffectiveLegs().forEach { leg ->
+                setStoppedForToday(leg.trainNumber, true)
+            }
         }
         val currentList = getLiveTrains().filterNot { it.id == id || it.trainNumber == id }
         persistList(currentList)
@@ -177,6 +221,34 @@ class LiveTrainManager(context: Context) {
                     stopsArray.put(sObj)
                 }
                 put("monitoredStops", stopsArray)
+
+                val legsArray = JSONArray()
+                item.legs.forEach { leg ->
+                    val lObj = JSONObject().apply {
+                        put("legIndex", leg.legIndex)
+                        put("trainNumber", leg.trainNumber)
+                        put("category", leg.category)
+                        put("originStationId", leg.originStationId)
+                        put("originStationName", leg.originStationName)
+                        put("destinationStationId", leg.destinationStationId)
+                        put("destinationStationName", leg.destinationStationName)
+                        put("scheduledDepartureTime", leg.scheduledDepartureTime)
+                        put("scheduledArrivalTime", leg.scheduledArrivalTime)
+
+                        val lStopsArray = JSONArray()
+                        leg.monitoredStops.forEach { stop ->
+                            val msObj = JSONObject().apply {
+                                put("stationId", stop.stationId)
+                                put("stationName", stop.stationName)
+                                put("progressPercentage", stop.progressPercentage)
+                            }
+                            lStopsArray.put(msObj)
+                        }
+                        put("monitoredStops", lStopsArray)
+                    }
+                    legsArray.put(lObj)
+                }
+                put("legs", legsArray)
             }
             jsonArray.put(obj)
         }

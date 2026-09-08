@@ -14,6 +14,53 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
+
+data class TrainLeg(
+    val legIndex: Int = 0,
+    val trainNumber: String = "",
+    val category: String = "Treno",
+    val originStationId: String = "",
+    val originStationName: String = "",
+    val destinationStationId: String = "",
+    val destinationStationName: String = "",
+    val departureTimeFormatted: String = "--:--",
+    val arrivalTimeFormatted: String = "--:--",
+    val departureTimestampMs: Long = 0L,
+    val arrivalTimestampMs: Long = 0L,
+    val delayMinutes: Int = 0,
+    val platform: String? = null
+)
+
+data class RouteSolution(
+    val id: String = UUID.randomUUID().toString(),
+    val originStationId: String = "",
+    val originStationName: String = "",
+    val destinationStationId: String = "",
+    val destinationStationName: String = "",
+    val departureTimeFormatted: String = "--:--",
+    val arrivalTimeFormatted: String = "--:--",
+    val totalDurationFormatted: String = "",
+    val departureTimestampMs: Long = 0L,
+    val arrivalTimestampMs: Long = 0L,
+    val legs: List<TrainLeg> = emptyList()
+) {
+    val numberOfTransfers: Int get() = (legs.size - 1).coerceAtLeast(0)
+
+    fun toStationDeparture(): StationDeparture {
+        val firstLeg = legs.firstOrNull()
+        return StationDeparture(
+            trainNumber = legs.joinToString(" + ") { it.trainNumber },
+            category = firstLeg?.category ?: "Treno",
+            destination = destinationStationName,
+            departureTimeFormatted = departureTimeFormatted,
+            delayMinutes = firstLeg?.delayMinutes ?: 0,
+            originStationId = originStationId,
+            departureTimestampMs = departureTimestampMs,
+            platform = firstLeg?.platform
+        )
+    }
+}
 
 object ViaggiaTrenoService {
 
@@ -54,7 +101,7 @@ object ViaggiaTrenoService {
     /**
      * Formatta un timestamp in millisecondi nell'ora locale italiana ("HH:mm").
      */
-    private fun formatTimestampToLocalTime(timestampMs: Long?): String {
+    fun formatTimestampToLocalTime(timestampMs: Long?): String {
         if (timestampMs == null || timestampMs <= 0) return "--:--"
         val sdf = SimpleDateFormat("HH:mm", Locale.ITALY)
         return sdf.format(Date(timestampMs))
@@ -456,98 +503,6 @@ object ViaggiaTrenoService {
             }
         }
 
-    /**
-     * Verifica se un treno viaggia nella DIREZIONE CORRETTA E che sia un treno VALIDO.
-     */
-    private suspend fun isTrainInCorrectDirection(
-        trainNumber: String,
-        originStationId: String,
-        departureTimestampMs: Long,
-        originNameQuery: String,
-        destinationNameQuery: String,
-        searchDate: Date
-    ): Boolean {
-        var status: TrainStatus? = null
-
-        val isSearchDateToday = isSameDay(searchDate, Date())
-
-        if (isSearchDateToday) {
-            // Per ricerche odierne, recupera lo stato in tempo reale di oggi
-            val resolveRes = resolveTrain(trainNumber)
-            if (resolveRes is ViaggiaTrenoResult.Success) {
-                val (num, depId, ts) = resolveRes.data
-                val statusRes = fetchTrainStatus(num, depId, ts)
-                if (statusRes is ViaggiaTrenoResult.Success) {
-                    status = statusRes.data
-                }
-            }
-            if (status == null && departureTimestampMs > 0) {
-                val statusRes = fetchTrainStatus(trainNumber, originStationId, departureTimestampMs.toString())
-                if (statusRes is ViaggiaTrenoResult.Success) {
-                    status = statusRes.data
-                }
-            }
-        } else {
-            // Per ricerche in date future, recupera la fermata/tratta programmata del treno
-            val statusRes = fetchTrainStatusForDeparture(trainNumber, originStationId, departureTimestampMs)
-            if (statusRes is ViaggiaTrenoResult.Success) {
-                status = statusRes.data
-            }
-        }
-
-        val trainStatus = status ?: return false
-        val stops = trainStatus.stops
-        if (stops.isEmpty()) return false
-
-        val cleanOrigin = originNameQuery.trim().lowercase()
-        val cleanDest = destinationNameQuery.trim().lowercase()
-        val cleanOriginId = originStationId.removePrefix("S").removePrefix("s")
-
-        // Trova l'indice della stazione di salita
-        val originIdx = stops.indexOfFirst { stop ->
-            val stopIdClean = stop.stationId.removePrefix("S").removePrefix("s")
-            stopIdClean == cleanOriginId ||
-                    stop.stationName.lowercase().equals(cleanOrigin, ignoreCase = true) ||
-                    stop.stationName.lowercase().contains(cleanOrigin)
-        }
-
-        // Trova l'indice della stazione di discesa
-        val destIdx = stops.indexOfFirst { stop ->
-            stop.stationName.lowercase().equals(cleanDest, ignoreCase = true) ||
-                    stop.stationName.lowercase().contains(cleanDest)
-        }
-
-        // 1. Deve trovare ENTRAMBE le stazioni E la stazione di salita deve precedere quella di discesa
-        if (originIdx < 0 || destIdx < 0 || originIdx >= destIdx) {
-            return false
-        }
-
-        val boardingStop = stops[originIdx]
-        val alightingStop = stops[destIdx]
-
-        // 2. Se la ricerca è per OGGI, controlla che il treno non sia soppresso, non abbia già completato il percorso o non abbia già superato le stazioni
-        if (isSearchDateToday) {
-            if (trainStatus.isCancelled || trainStatus.progressPercentage >= 100) {
-                return false
-            }
-
-            if (boardingStop.isPassed || alightingStop.isPassed) {
-                return false
-            }
-
-            val boardingDepartureTimeMs = boardingStop.actualOrEstimatedTimeMs
-                ?: boardingStop.scheduledTimeMs
-                ?: departureTimestampMs
-
-            val searchCutoffTimeMs = searchDate.time - 5 * 60 * 1000L // 5 minuti di tolleranza
-            if (boardingDepartureTimeMs < searchCutoffTimeMs) {
-                return false
-            }
-        }
-
-        return true
-    }
-
     private fun isSameDay(date1: Date, date2: Date): Boolean {
         val cal1 = Calendar.getInstance().apply { time = date1 }
         val cal2 = Calendar.getInstance().apply { time = date2 }
@@ -556,7 +511,267 @@ object ViaggiaTrenoService {
     }
 
     /**
-     * Cerca i treni disponibili tra una stazione di partenza e una di arrivo per la data/ora indicata.
+     * Cerca i treni e le soluzioni con o senza cambi tra una stazione di partenza e una di arrivo.
+     */
+    suspend fun fetchRouteSolutionsWithTransfers(
+        originStationId: String,
+        originNameQuery: String,
+        destinationQuery: String,
+        date: Date = Date(),
+        minSolutions: Int = 5
+    ): ViaggiaTrenoResult<List<RouteSolution>> = withContext(Dispatchers.IO) {
+        try {
+            val solutions = mutableListOf<RouteSolution>()
+            val processedSolutionKeys = mutableSetOf<String>()
+
+            var currentSearchDate = date
+            var attempts = 0
+
+            val cleanOriginName = originNameQuery.trim()
+            var cleanDestName = destinationQuery.trim()
+            var destStationId = ""
+
+            when (val destAuto = autocompleteStation(cleanDestName)) {
+                is ViaggiaTrenoResult.Success -> {
+                    val found = destAuto.data.firstOrNull()
+                    if (found != null) {
+                        destStationId = found.id
+                        cleanDestName = found.name
+                    }
+                }
+                is ViaggiaTrenoResult.Error -> {}
+            }
+
+            val cleanOriginId = originStationId.removePrefix("S").removePrefix("s")
+
+            while (solutions.size < minSolutions && attempts < 6) {
+                val departuresRes = fetchStationDepartures(originStationId, currentSearchDate)
+                if (departuresRes is ViaggiaTrenoResult.Error) {
+                    if (solutions.isNotEmpty()) break
+                    return@withContext departuresRes
+                }
+
+                val rawDepartures = (departuresRes as ViaggiaTrenoResult.Success).data
+
+                for (dep in rawDepartures) {
+                    val statusRes = if (isSameDay(currentSearchDate, Date())) {
+                        resolveTrain(dep.trainNumber).let { resolve ->
+                            if (resolve is ViaggiaTrenoResult.Success) {
+                                fetchTrainStatus(resolve.data.first, resolve.data.second, resolve.data.third)
+                            } else null
+                        }
+                    } else {
+                        fetchTrainStatusForDeparture(dep.trainNumber, originStationId, dep.departureTimestampMs)
+                    }
+
+                    val status = (statusRes as? ViaggiaTrenoResult.Success)?.data ?: continue
+                    val stops = status.stops
+                    if (stops.isEmpty()) continue
+
+                    // Cerca la stazione di salita
+                    val originIdx = stops.indexOfFirst { stop ->
+                        val stopIdClean = stop.stationId.removePrefix("S").removePrefix("s")
+                        stopIdClean == cleanOriginId ||
+                                stop.stationName.contains(cleanOriginName, ignoreCase = true)
+                    }
+                    if (originIdx < 0) continue
+
+                    val boardingStop = stops[originIdx]
+
+                    // Se per oggi, controlla che la salita non sia già passata o treno soppresso
+                    if (isSameDay(currentSearchDate, Date())) {
+                        if (status.isCancelled || status.progressPercentage >= 100 || boardingStop.isPassed) continue
+                    }
+
+                    // CASE 1: VERIFICA SE È UN TRENO DIRETTO PER LA DESTINAZIONE
+                    val destIdx = stops.indexOfFirst { stop ->
+                        if (destStationId.isNotBlank()) {
+                            stop.stationId.removePrefix("S").removePrefix("s") == destStationId.removePrefix("S").removePrefix("s") ||
+                                    stop.stationName.contains(cleanDestName, ignoreCase = true)
+                        } else {
+                            stop.stationName.contains(cleanDestName, ignoreCase = true)
+                        }
+                    }
+
+                    if (destIdx > originIdx) {
+                        val alightingStop = stops[destIdx]
+                        val key = "${dep.trainNumber}_${boardingStop.scheduledTimeMs}"
+
+                        if (!processedSolutionKeys.contains(key)) {
+                            processedSolutionKeys.add(key)
+
+                            val depTimeStr = formatTimestampToLocalTime(boardingStop.actualOrEstimatedTimeMs ?: boardingStop.scheduledTimeMs)
+                            val arrTimeStr = formatTimestampToLocalTime(alightingStop.actualOrEstimatedTimeMs ?: alightingStop.scheduledTimeMs)
+                            val depMs = boardingStop.actualOrEstimatedTimeMs ?: boardingStop.scheduledTimeMs ?: dep.departureTimestampMs
+                            val arrMs = alightingStop.actualOrEstimatedTimeMs ?: alightingStop.scheduledTimeMs ?: depMs
+
+                            val durationMinutes = ((arrMs - depMs) / (1000 * 60)).coerceAtLeast(0)
+                            val durationStr = "${durationMinutes / 60}h ${durationMinutes % 60}m"
+
+                            val singleLeg = TrainLeg(
+                                legIndex = 0,
+                                trainNumber = dep.trainNumber,
+                                category = dep.category,
+                                originStationId = originStationId,
+                                originStationName = boardingStop.stationName,
+                                destinationStationId = alightingStop.stationId,
+                                destinationStationName = alightingStop.stationName,
+                                departureTimeFormatted = depTimeStr,
+                                arrivalTimeFormatted = arrTimeStr,
+                                departureTimestampMs = depMs,
+                                arrivalTimestampMs = arrMs,
+                                delayMinutes = status.delayMinutes,
+                                platform = dep.platform
+                            )
+
+                            solutions.add(
+                                RouteSolution(
+                                    originStationId = originStationId,
+                                    originStationName = boardingStop.stationName,
+                                    destinationStationId = alightingStop.stationId,
+                                    destinationStationName = alightingStop.stationName,
+                                    departureTimeFormatted = depTimeStr,
+                                    arrivalTimeFormatted = arrTimeStr,
+                                    totalDurationFormatted = durationStr,
+                                    departureTimestampMs = depMs,
+                                    arrivalTimestampMs = arrMs,
+                                    legs = listOf(singleLeg)
+                                )
+                            )
+                        }
+                    } else {
+                        // CASE 2: RICERCA CON CAMBIO (1 CAMBIO / 2 TRENI) TRAMITE STAZIONI DI SNODO
+                        val candidateJunctionStops = stops.drop(originIdx + 1)
+
+                        for (junctionStop in candidateJunctionStops) {
+                            val leg1ArrMs = junctionStop.actualOrEstimatedTimeMs ?: junctionStop.scheduledTimeMs ?: continue
+                            val junctionStationId = junctionStop.stationId
+
+                            val transferDate = Date(leg1ArrMs + 5 * 60 * 1000L)
+                            val leg2DeparturesRes = fetchStationDepartures(junctionStationId, transferDate)
+                            if (leg2DeparturesRes !is ViaggiaTrenoResult.Success) continue
+
+                            for (leg2Dep in leg2DeparturesRes.data.take(15)) {
+                                if (leg2Dep.trainNumber == dep.trainNumber) continue
+
+                                val leg2StatusRes = if (isSameDay(transferDate, Date())) {
+                                    resolveTrain(leg2Dep.trainNumber).let { resolve ->
+                                        if (resolve is ViaggiaTrenoResult.Success) {
+                                            fetchTrainStatus(resolve.data.first, resolve.data.second, resolve.data.third)
+                                        } else null
+                                    }
+                                } else {
+                                    fetchTrainStatusForDeparture(leg2Dep.trainNumber, junctionStationId, leg2Dep.departureTimestampMs)
+                                }
+
+                                val leg2Status = (leg2StatusRes as? ViaggiaTrenoResult.Success)?.data ?: continue
+                                val leg2Stops = leg2Status.stops
+                                if (leg2Stops.isEmpty()) continue
+
+                                val leg2JunctionIdx = leg2Stops.indexOfFirst { s ->
+                                    s.stationId.removePrefix("S").removePrefix("s") == junctionStationId.removePrefix("S").removePrefix("s") ||
+                                            s.stationName.contains(junctionStop.stationName, ignoreCase = true)
+                                }
+                                val leg2DestIdx = leg2Stops.indexOfFirst { s ->
+                                    if (destStationId.isNotBlank()) {
+                                        s.stationId.removePrefix("S").removePrefix("s") == destStationId.removePrefix("S").removePrefix("s") ||
+                                                s.stationName.contains(cleanDestName, ignoreCase = true)
+                                    } else {
+                                        s.stationName.contains(cleanDestName, ignoreCase = true)
+                                    }
+                                }
+
+                                if (leg2JunctionIdx >= 0 && leg2DestIdx > leg2JunctionIdx) {
+                                    val leg2Boarding = leg2Stops[leg2JunctionIdx]
+                                    val leg2Alighting = leg2Stops[leg2DestIdx]
+
+                                    val leg2DepMs = leg2Boarding.actualOrEstimatedTimeMs ?: leg2Boarding.scheduledTimeMs ?: leg2Dep.departureTimestampMs
+
+                                    val transferWaitMinutes = ((leg2DepMs - leg1ArrMs) / (1000 * 60))
+                                    if (transferWaitMinutes in 4..90) {
+                                        val solutionKey = "${dep.trainNumber}_${leg2Dep.trainNumber}_${boardingStop.scheduledTimeMs}"
+
+                                        if (!processedSolutionKeys.contains(solutionKey)) {
+                                            processedSolutionKeys.add(solutionKey)
+
+                                            val leg1DepStr = formatTimestampToLocalTime(boardingStop.actualOrEstimatedTimeMs ?: boardingStop.scheduledTimeMs)
+                                            val leg1ArrStr = formatTimestampToLocalTime(leg1ArrMs)
+                                            val leg1DepMs = boardingStop.actualOrEstimatedTimeMs ?: boardingStop.scheduledTimeMs ?: dep.departureTimestampMs
+
+                                            val leg2DepStr = formatTimestampToLocalTime(leg2DepMs)
+                                            val leg2ArrMs = leg2Alighting.actualOrEstimatedTimeMs ?: leg2Alighting.scheduledTimeMs ?: leg2DepMs
+                                            val leg2ArrStr = formatTimestampToLocalTime(leg2ArrMs)
+
+                                            val totalDurationMinutes = ((leg2ArrMs - leg1DepMs) / (1000 * 60)).coerceAtLeast(0)
+                                            val durationStr = "${totalDurationMinutes / 60}h ${totalDurationMinutes % 60}m"
+
+                                            val leg1 = TrainLeg(
+                                                legIndex = 0,
+                                                trainNumber = dep.trainNumber,
+                                                category = dep.category,
+                                                originStationId = originStationId,
+                                                originStationName = boardingStop.stationName,
+                                                destinationStationId = junctionStationId,
+                                                destinationStationName = junctionStop.stationName,
+                                                departureTimeFormatted = leg1DepStr,
+                                                arrivalTimeFormatted = leg1ArrStr,
+                                                departureTimestampMs = leg1DepMs,
+                                                arrivalTimestampMs = leg1ArrMs,
+                                                delayMinutes = status.delayMinutes,
+                                                platform = dep.platform
+                                            )
+
+                                            val leg2 = TrainLeg(
+                                                legIndex = 1,
+                                                trainNumber = leg2Dep.trainNumber,
+                                                category = leg2Dep.category,
+                                                originStationId = junctionStationId,
+                                                originStationName = junctionStop.stationName,
+                                                destinationStationId = leg2Alighting.stationId,
+                                                destinationStationName = leg2Alighting.stationName,
+                                                departureTimeFormatted = leg2DepStr,
+                                                arrivalTimeFormatted = leg2ArrStr,
+                                                departureTimestampMs = leg2DepMs,
+                                                arrivalTimestampMs = leg2ArrMs,
+                                                delayMinutes = leg2Status.delayMinutes,
+                                                platform = leg2Dep.platform
+                                            )
+
+                                            solutions.add(
+                                                RouteSolution(
+                                                    originStationId = originStationId,
+                                                    originStationName = boardingStop.stationName,
+                                                    destinationStationId = leg2Alighting.stationId,
+                                                    destinationStationName = leg2Alighting.stationName,
+                                                    departureTimeFormatted = leg1DepStr,
+                                                    arrivalTimeFormatted = leg2ArrStr,
+                                                    totalDurationFormatted = durationStr,
+                                                    departureTimestampMs = leg1DepMs,
+                                                    arrivalTimestampMs = leg2ArrMs,
+                                                    legs = listOf(leg1, leg2)
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                currentSearchDate = Date(currentSearchDate.time + 60 * 60 * 1000L)
+                attempts++
+            }
+
+            val sortedSolutions = solutions.sortedBy { it.departureTimestampMs }
+            ViaggiaTrenoResult.Success(sortedSolutions)
+        } catch (e: Exception) {
+            ViaggiaTrenoResult.Error("Errore ricerca tratta: ${e.localizedMessage}", e)
+        }
+    }
+
+    /**
+     * Cerca i treni disponibili mantenendo la firma per compatibilità.
      */
     suspend fun fetchRouteSolutions(
         originStationId: String,
@@ -565,49 +780,12 @@ object ViaggiaTrenoService {
         date: Date = Date(),
         minSolutions: Int = 5
     ): ViaggiaTrenoResult<List<StationDeparture>> = withContext(Dispatchers.IO) {
-        try {
-            val validSolutions = mutableListOf<StationDeparture>()
-            val processedTrainNumbers = mutableSetOf<String>()
-
-            var currentSearchDate = date
-            var attempts = 0
-
-            while (validSolutions.size < minSolutions && attempts < 6) {
-                val departuresRes = fetchStationDepartures(originStationId, currentSearchDate)
-                if (departuresRes is ViaggiaTrenoResult.Error) {
-                    if (validSolutions.isNotEmpty()) break
-                    return@withContext departuresRes
-                }
-
-                val rawDepartures = (departuresRes as ViaggiaTrenoResult.Success).data
-                if (rawDepartures.isEmpty()) break
-
-                for (dep in rawDepartures) {
-                    if (processedTrainNumbers.contains(dep.trainNumber)) continue
-                    processedTrainNumbers.add(dep.trainNumber)
-
-                    val isMatch = isTrainInCorrectDirection(
-                        trainNumber = dep.trainNumber,
-                        originStationId = originStationId,
-                        departureTimestampMs = dep.departureTimestampMs,
-                        originNameQuery = originNameQuery,
-                        destinationNameQuery = destinationQuery,
-                        searchDate = currentSearchDate
-                    )
-
-                    if (isMatch) {
-                        validSolutions.add(dep)
-                        if (validSolutions.size >= minSolutions) break
-                    }
-                }
-
-                currentSearchDate = Date(currentSearchDate.time + 60 * 60 * 1000L)
-                attempts++
+        when (val res = fetchRouteSolutionsWithTransfers(originStationId, originNameQuery, destinationQuery, date, minSolutions)) {
+            is ViaggiaTrenoResult.Success -> {
+                val list = res.data.map { it.toStationDeparture() }
+                ViaggiaTrenoResult.Success(list)
             }
-
-            ViaggiaTrenoResult.Success(validSolutions)
-        } catch (e: Exception) {
-            ViaggiaTrenoResult.Error("Errore ricerca tratta: ${e.localizedMessage}", e)
+            is ViaggiaTrenoResult.Error -> ViaggiaTrenoResult.Error(res.message, res.cause)
         }
     }
 

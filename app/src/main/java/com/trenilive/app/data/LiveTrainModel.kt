@@ -8,6 +8,19 @@ data class MonitoredStop(
     val progressPercentage: Int = 0
 )
 
+data class LiveTrainLeg(
+    val legIndex: Int = 0,
+    val trainNumber: String = "",
+    val category: String = "Treno",
+    val originStationId: String = "",
+    val originStationName: String = "",
+    val destinationStationId: String = "",
+    val destinationStationName: String = "",
+    val scheduledDepartureTime: String = "",
+    val scheduledArrivalTime: String = "",
+    val monitoredStops: List<MonitoredStop> = emptyList()
+)
+
 data class LiveTrainConfig(
     val id: String,
     val trainNumber: String,
@@ -17,8 +30,46 @@ data class LiveTrainConfig(
     val destinationStationName: String = "",
     val scheduledDepartureTime: String = "",
     val isEnabled: Boolean = true,
-    val monitoredStops: List<MonitoredStop> = emptyList() // Fino a 4 fermate selezionate per i punti milestone sulla barra
+    val monitoredStops: List<MonitoredStop> = emptyList(), // Fino a 4 fermate selezionate per i punti milestone sulla barra
+    val legs: List<LiveTrainLeg> = emptyList() // Supporto tratte componenti per le soluzioni con cambi
 ) {
+    /**
+     * Restituisce la lista effettiva delle tratte. Se `legs` è vuoto (treno singolo retrocompatibile),
+     * genera una singola tratta sintetica basata sui campi principali del `LiveTrainConfig`.
+     */
+    fun getEffectiveLegs(): List<LiveTrainLeg> {
+        return if (legs.isNotEmpty()) {
+            legs
+        } else {
+            listOf(
+                LiveTrainLeg(
+                    legIndex = 0,
+                    trainNumber = trainNumber,
+                    category = "Treno",
+                    originStationId = originStationId,
+                    originStationName = originStationName,
+                    destinationStationId = "",
+                    destinationStationName = destinationStationName,
+                    scheduledDepartureTime = scheduledDepartureTime,
+                    scheduledArrivalTime = "",
+                    monitoredStops = monitoredStops
+                )
+            )
+        }
+    }
+
+    /**
+     * Restituisce un etichetta riassuntiva dei treni (es. "16824 + 9430" se con cambio).
+     */
+    fun getDisplayTrainNumbers(): String {
+        val effLegs = getEffectiveLegs()
+        return if (effLegs.size > 1) {
+            effLegs.joinToString(" + ") { it.trainNumber }
+        } else {
+            trainNumber
+        }
+    }
+
     fun isScheduledForDay(calendarDayOfWeek: Int): Boolean {
         return isEnabled && daysOfWeek.contains(calendarDayOfWeek)
     }

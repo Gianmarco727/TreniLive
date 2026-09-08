@@ -180,12 +180,10 @@ fun TrainTrackerScreen(
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var trainStatus by remember { mutableStateOf<TrainStatus?>(null) }
-    var stationSolutions by remember { mutableStateOf<List<StationDeparture>>(emptyList()) }
+    var routeSolutions by remember { mutableStateOf<List<RouteSolution>>(emptyList()) }
 
     // Caching e stato per la card soluzione attualmente espansa
-    var expandedTrainNumber by remember { mutableStateOf<String?>(null) }
-    var expandedTrainLoading by remember { mutableStateOf(false) }
-    var expandedTrainStatuses by remember { mutableStateOf(mapOf<String, TrainStatus>()) }
+    var expandedSolutionId by remember { mutableStateOf<String?>(null) }
 
     val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
@@ -260,34 +258,7 @@ fun TrainTrackerScreen(
         }
     }
 
-    // Funzione espansione inline per una soluzione con cache fluida
-    val toggleDepartureExpansion = { dep: StationDeparture ->
-        if (expandedTrainNumber == dep.trainNumber) {
-            expandedTrainNumber = null
-        } else {
-            expandedTrainNumber = dep.trainNumber
-
-            if (!expandedTrainStatuses.containsKey(dep.trainNumber)) {
-                expandedTrainLoading = true
-
-                coroutineScope.launch {
-                    when (val statusRes = ViaggiaTrenoService.fetchTrainStatusForDeparture(
-                        trainNumber = dep.trainNumber,
-                        departureStationId = dep.originStationId,
-                        departureTimestampMs = dep.departureTimestampMs
-                    )) {
-                        is ViaggiaTrenoResult.Success -> {
-                            expandedTrainStatuses = expandedTrainStatuses + (dep.trainNumber to statusRes.data)
-                        }
-                        is ViaggiaTrenoResult.Error -> {}
-                    }
-                    expandedTrainLoading = false
-                }
-            }
-        }
-    }
-
-    // Funzione ricerca soluzioni per stazione e orario
+    // Funzione ricerca soluzioni per stazione e orario (supportando diretti e cambi)
     val searchByStations = {
         focusManager.clearFocus()
         val originName = originQuery.text.trim()
@@ -301,11 +272,10 @@ fun TrainTrackerScreen(
             errorMessage = null
             isLoading = true
             trainStatus = null
-            stationSolutions = emptyList()
-            expandedTrainNumber = null
+            routeSolutions = emptyList()
+            expandedSolutionId = null
 
             coroutineScope.launch {
-                // Aggiungi la ricerca tra le ricerche recenti
                 recentSearchesManager.addRecentSearch(originName, destName)
                 recentSearches = recentSearchesManager.getRecentSearches()
 
@@ -326,7 +296,7 @@ fun TrainTrackerScreen(
                 }
 
                 val searchDate = Date(selectedDateMs)
-                when (val routeRes = ViaggiaTrenoService.fetchRouteSolutions(
+                when (val routeRes = ViaggiaTrenoService.fetchRouteSolutionsWithTransfers(
                     originStationId = originStation.id,
                     originNameQuery = originName,
                     destinationQuery = destName,
@@ -334,10 +304,10 @@ fun TrainTrackerScreen(
                     minSolutions = 5
                 )) {
                     is ViaggiaTrenoResult.Success -> {
-                        stationSolutions = routeRes.data
-                        if (stationSolutions.isEmpty()) {
+                        routeSolutions = routeRes.data
+                        if (routeSolutions.isEmpty()) {
                             val timeStr = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.ITALY).format(searchDate)
-                            errorMessage = "Nessun treno trovato tra ${originStation.name} e $destName a partire dal $timeStr."
+                            errorMessage = "Nessuna soluzione trovata tra ${originStation.name} e $destName a partire dal $timeStr."
                         }
                     }
                     is ViaggiaTrenoResult.Error -> {
@@ -399,7 +369,7 @@ fun TrainTrackerScreen(
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = "Cerca per Numero Treno o per Tratta Completa",
+            text = "Cerca per Numero Treno o per Tratta Completa (anche con Cambi)",
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
@@ -472,7 +442,7 @@ fun TrainTrackerScreen(
             }
         }
 
-        // BARRA RICERCHE RECENTI (Massimo 5 tratte recenti)
+        // BARRA RICERCHES RECENTI
         if (recentSearches.isNotEmpty()) {
             Text(
                 text = "RICERCHE RECENTI",
@@ -503,7 +473,7 @@ fun TrainTrackerScreen(
                             )
                             selectedOriginStation = null
                             selectedDestinationStation = null
-                            selectedDateMs = System.currentTimeMillis() // Imposta data ed ora attuali
+                            selectedDateMs = System.currentTimeMillis()
                             searchByStations()
                         },
                         label = {
@@ -652,7 +622,7 @@ fun TrainTrackerScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Stazione Partenza (con Autocomplete)
+                // Stazione Partenza
                 OutlinedTextField(
                     value = originQuery,
                     onValueChange = { tfv ->
@@ -673,7 +643,7 @@ fun TrainTrackerScreen(
                             originSuggestions = emptyList()
                         }
                     },
-                    placeholder = { Text("Stazione di Partenza") },
+                    placeholder = { Text("Stazione di Partenza (es. Conegliano)") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
@@ -698,7 +668,6 @@ fun TrainTrackerScreen(
                     }
                 )
 
-                // Autocomplete Partenza
                 if (originSuggestions.isNotEmpty() && selectedOriginStation == null) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -730,7 +699,7 @@ fun TrainTrackerScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Stazione Arrivo (con Autocomplete)
+                // Stazione Arrivo
                 OutlinedTextField(
                     value = destinationQuery,
                     onValueChange = { tfv ->
@@ -751,7 +720,7 @@ fun TrainTrackerScreen(
                             destinationSuggestions = emptyList()
                         }
                     },
-                    placeholder = { Text("Stazione di Destinazione") },
+                    placeholder = { Text("Stazione di Destinazione (es. Bologna Centrale)") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
@@ -776,7 +745,6 @@ fun TrainTrackerScreen(
                     }
                 )
 
-                // Autocomplete Arrivo
                 if (destinationSuggestions.isNotEmpty() && selectedDestinationStation == null) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -872,46 +840,12 @@ fun TrainTrackerScreen(
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
                             )
-
-                            val searchingNum = trainNumberInput.trim()
-                            if (searchingNum.isNotBlank() && favoritesManager.isFavorite(searchingNum)) {
-                                Spacer(modifier = Modifier.height(10.dp))
-                                OutlinedButton(
-                                    onClick = {
-                                        favoritesManager.toggleFavorite(searchingNum)
-                                        favoriteList = favoritesManager.getFavoriteTrains()
-                                        errorMessage = null
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    shape = RoundedCornerShape(10.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD32F2F))
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Delete,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onErrorContainer,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Text(
-                                            text = "Rimuovi Treno $searchingNum dai Preferiti",
-                                            color = MaterialTheme.colorScheme.onErrorContainer,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
                         }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Pulsante di Ricerca Soluzioni Tratta
                 Button(
                     onClick = { searchByStations() },
                     enabled = !isLoading,
@@ -963,30 +897,30 @@ fun TrainTrackerScreen(
             }
         }
 
-        // LISTA SOLUZIONI TROVATE (CON ESPANSIONE INLINE FLUIDA E CACHING SENZA RICARICARE LA PAGINA)
-        if (stationSolutions.isNotEmpty() && !isLoading) {
+        // LISTA SOLUZIONI TROVATE (CON SUPPORTO COMPLETO A TRENI DIRETTI E SOLUZIONI CON CAMBI)
+        if (routeSolutions.isNotEmpty() && !isLoading) {
             Spacer(modifier = Modifier.height(20.dp))
             Text(
-                text = "PROSSIMI TRENI DISPONIBILI DALL'ORARIO SELEZIONATO (${stationSolutions.size})",
+                text = "SOLUZIONI DI VIAGGIO DISPONIBILI (${routeSolutions.size})",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
-            stationSolutions.forEach { departure ->
-                val isExpanded = expandedTrainNumber == departure.trainNumber
+            routeSolutions.forEach { solution ->
+                val isExpanded = expandedSolutionId == solution.id
 
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 12.dp)
                         .clickable {
-                            toggleDepartureExpansion(departure)
+                            expandedSolutionId = if (isExpanded) null else solution.id
                         },
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (isExpanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
+                        containerColor = if (isExpanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface
                     ),
                     border = if (isExpanded) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -1002,49 +936,44 @@ fun TrainTrackerScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "${departure.category} ${departure.trainNumber}",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
-                                    color = if (isExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(14.dp)
-                                    )
                                     Text(
-                                        text = departure.destination,
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        text = "${solution.departureTimeFormatted} ➔ ${solution.arrivalTimeFormatted}",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 18.sp,
+                                        color = MaterialTheme.colorScheme.primary
                                     )
-                                }
-                            }
 
-                            Column(horizontalAlignment = Alignment.End) {
+                                    // Badge Cambi / Diretto
+                                    Surface(
+                                        color = if (solution.numberOfTransfers == 0) Color(0xFF2E7D32).copy(alpha = 0.15f) else Color(0xFFE65100).copy(alpha = 0.15f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text(
+                                            text = if (solution.numberOfTransfers == 0) "Diretto" else "${solution.numberOfTransfers} Cambio",
+                                            color = if (solution.numberOfTransfers == 0) Color(0xFF2E7D32) else Color(0xFFE65100),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+
                                 Text(
-                                    text = departure.departureTimeFormatted,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 18.sp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = if (departure.delayMinutes > 0) "+${departure.delayMinutes} min" else "In orario",
-                                    color = if (departure.delayMinutes > 0) Color(0xFFE65100) else Color(0xFF2E7D32),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
+                                    text = "Durata: ${solution.totalDurationFormatted} • ${solution.originStationName} ➔ ${solution.destinationStationName}",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = 2.dp)
                                 )
                             }
                         }
 
-                        // ESPANSIONE INLINE FLUIDA DELLA CARD SELEZIONATA CON CACHING
+                        // VISTA ESPANSA DELLE TRATTE COMPONENTI
                         AnimatedVisibility(
                             visible = isExpanded,
                             enter = fadeIn(),
@@ -1053,29 +982,68 @@ fun TrainTrackerScreen(
                             Column(modifier = Modifier.padding(top = 12.dp)) {
                                 HorizontalDivider(modifier = Modifier.padding(bottom = 12.dp))
 
-                                val cachedStatus = expandedTrainStatuses[departure.trainNumber]
-
-                                if (cachedStatus != null) {
-                                    Text(
-                                        text = "Ultimo rilevamento: ${cachedStatus.lastDetectedStation}",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    cachedStatus.nextStop?.let { next ->
-                                        Text(
-                                            text = "Prossima fermata: ${next.stationName} (${formatTime(next.actualOrEstimatedTimeMs)})",
-                                            fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(top = 2.dp)
-                                        )
-                                    }
-                                } else if (expandedTrainLoading) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(8.dp),
-                                        horizontalArrangement = Arrangement.Center
+                                solution.legs.forEachIndexed { idx, leg ->
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = 8.dp)
                                     ) {
-                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "Tratta ${idx + 1}: ${leg.category} ${leg.trainNumber}",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 14.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                leg.platform?.let { plat ->
+                                                    Text(
+                                                        text = "Binario $plat",
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF2E7D32)
+                                                    )
+                                                }
+                                            }
+
+                                            Text(
+                                                text = "${leg.originStationName} (${leg.departureTimeFormatted}) ➔ ${leg.destinationStationName} (${leg.arrivalTimeFormatted})",
+                                                fontSize = 12.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(top = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    if (idx < solution.legs.size - 1) {
+                                        val nextLeg = solution.legs[idx + 1]
+                                        val waitMin = ((nextLeg.departureTimestampMs - leg.arrivalTimestampMs) / (1000 * 60)).coerceAtLeast(0)
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp, horizontal = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.TransferWithinAStation,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.secondary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text(
+                                                text = "Cambio a ${leg.destinationStationName} • Attesa coincidenza: $waitMin min",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.secondary
+                                            )
+                                        }
                                     }
                                 }
 
@@ -1084,10 +1052,8 @@ fun TrainTrackerScreen(
                                 Button(
                                     onClick = {
                                         coroutineScope.launch {
-                                            programTrainInLiveTracker(
-                                                departure = departure,
-                                                originQueryText = originQuery.text,
-                                                destinationQueryText = destinationQuery.text,
+                                            programRouteSolutionInLiveTracker(
+                                                solution = solution,
                                                 context = context,
                                                 onComplete = {
                                                     onSwitchToLiveTracker()
@@ -1113,7 +1079,7 @@ fun TrainTrackerScreen(
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Text(
-                                            text = "Programma nel Live Tracker",
+                                            text = if (solution.numberOfTransfers == 0) "Programma nel Live Tracker" else "Programma Soluzione con Cambio nel Tracker",
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onPrimary
@@ -1131,98 +1097,108 @@ fun TrainTrackerScreen(
     }
 }
 
-private suspend fun programTrainInLiveTracker(
-    departure: StationDeparture,
-    originQueryText: String,
-    destinationQueryText: String,
+private suspend fun programRouteSolutionInLiveTracker(
+    solution: RouteSolution,
     context: Context,
     onComplete: () -> Unit
 ) {
     val liveManager = LiveTrainManager(context)
 
-    var originStationName = departure.destination
-    var destinationStationName = departure.destination
-    val originStationId = departure.originStationId
-    val autoMonitoredStops = mutableListOf<MonitoredStop>()
+    val savedLegs = mutableListOf<LiveTrainLeg>()
+    var allDetectedDays = setOf<Int>()
 
-    // Rileva automaticamente i giorni della settimana in cui il treno circola
-    val detectedDays = ViaggiaTrenoService.detectRunningDaysForTrain(departure.trainNumber)
+    solution.legs.forEachIndexed { index, leg ->
+        val detectedDays = ViaggiaTrenoService.detectRunningDaysForTrain(leg.trainNumber)
+        if (allDetectedDays.isEmpty()) {
+            allDetectedDays = detectedDays
+        } else {
+            allDetectedDays = allDetectedDays.intersect(detectedDays).ifEmpty { detectedDays }
+        }
 
-    when (val statusRes = ViaggiaTrenoService.fetchTrainStatusForDeparture(
-        trainNumber = departure.trainNumber,
-        departureStationId = departure.originStationId,
-        departureTimestampMs = departure.departureTimestampMs
-    )) {
-        is ViaggiaTrenoResult.Success -> {
-            val status = statusRes.data
-            originStationName = status.originStationName
-            destinationStationName = status.destinationStationName
+        val autoMonitoredStops = mutableListOf<MonitoredStop>()
 
-            val totalStopsCount = status.stops.size
-            if (totalStopsCount > 1) {
-                val boardingIdx = status.stops.indexOfFirst {
-                    it.stationName.contains(originQueryText, ignoreCase = true)
-                }.takeIf { it >= 0 } ?: 0
+        when (val statusRes = ViaggiaTrenoService.fetchTrainStatusForDeparture(
+            trainNumber = leg.trainNumber,
+            departureStationId = leg.originStationId,
+            departureTimestampMs = leg.departureTimestampMs
+        )) {
+            is ViaggiaTrenoResult.Success -> {
+                val status = statusRes.data
+                val totalStopsCount = status.stops.size
+                if (totalStopsCount > 1) {
+                    val boardingIdx = status.stops.indexOfFirst {
+                        it.stationName.contains(leg.originStationName, ignoreCase = true)
+                    }.takeIf { it >= 0 } ?: 0
 
-                val alightingIdx = status.stops.indexOfFirst {
-                    it.stationName.contains(destinationQueryText, ignoreCase = true)
-                }.takeIf { it >= 0 } ?: (totalStopsCount - 1)
+                    val alightingIdx = status.stops.indexOfFirst {
+                        it.stationName.contains(leg.destinationStationName, ignoreCase = true)
+                    }.takeIf { it >= 0 } ?: (totalStopsCount - 1)
 
-                val boardingStop = status.stops.getOrNull(boardingIdx)
-                val alightingStop = status.stops.getOrNull(alightingIdx)
+                    val boardingStop = status.stops.getOrNull(boardingIdx)
+                    val alightingStop = status.stops.getOrNull(alightingIdx)
 
-                if (boardingStop != null) {
-                    val pct = ((boardingIdx.toFloat() / (totalStopsCount - 1).toFloat()) * 100).toInt().coerceIn(0, 100)
-                    autoMonitoredStops.add(
-                        MonitoredStop(
-                            stationId = boardingStop.stationId,
-                            stationName = boardingStop.stationName,
-                            progressPercentage = pct
+                    if (boardingStop != null) {
+                        val pct = ((boardingIdx.toFloat() / (totalStopsCount - 1).toFloat()) * 100).toInt().coerceIn(0, 100)
+                        autoMonitoredStops.add(
+                            MonitoredStop(
+                                stationId = boardingStop.stationId,
+                                stationName = boardingStop.stationName,
+                                progressPercentage = pct
+                            )
                         )
-                    )
-                }
+                    }
 
-                if (alightingStop != null && alightingStop.stationId != boardingStop?.stationId) {
-                    val pct = ((alightingIdx.toFloat() / (totalStopsCount - 1).toFloat()) * 100).toInt().coerceIn(0, 100)
-                    autoMonitoredStops.add(
-                        MonitoredStop(
-                            stationId = alightingStop.stationId,
-                            stationName = alightingStop.stationName,
-                            progressPercentage = pct
+                    if (alightingStop != null && alightingStop.stationId != boardingStop?.stationId) {
+                        val pct = ((alightingIdx.toFloat() / (totalStopsCount - 1).toFloat()) * 100).toInt().coerceIn(0, 100)
+                        autoMonitoredStops.add(
+                            MonitoredStop(
+                                stationId = alightingStop.stationId,
+                                stationName = alightingStop.stationName,
+                                progressPercentage = pct
+                            )
                         )
-                    )
+                    }
                 }
             }
+            is ViaggiaTrenoResult.Error -> {}
         }
-        is ViaggiaTrenoResult.Error -> {}
+
+        savedLegs.add(
+            LiveTrainLeg(
+                legIndex = index,
+                trainNumber = leg.trainNumber,
+                category = leg.category,
+                originStationId = leg.originStationId,
+                originStationName = leg.originStationName,
+                destinationStationId = leg.destinationStationId,
+                destinationStationName = leg.destinationStationName,
+                scheduledDepartureTime = leg.departureTimeFormatted,
+                scheduledArrivalTime = leg.arrivalTimeFormatted,
+                monitoredStops = autoMonitoredStops
+            )
+        )
     }
 
-    val departureTimeLocal = if (departure.departureTimestampMs > 0) {
-        formatTime(departure.departureTimestampMs)
-    } else {
-        departure.departureTimeFormatted
-    }
-
+    val primaryTrainNum = solution.legs.joinToString(" + ") { it.trainNumber }
     val newConfig = LiveTrainConfig(
         id = UUID.randomUUID().toString(),
-        trainNumber = departure.trainNumber,
-        daysOfWeek = detectedDays, // Usiamo i giorni rilevati automaticamente dalle API!
-        originStationId = originStationId,
-        originStationName = originStationName,
-        destinationStationName = destinationStationName,
-        scheduledDepartureTime = departureTimeLocal,
+        trainNumber = primaryTrainNum,
+        daysOfWeek = if (allDetectedDays.isNotEmpty()) allDetectedDays else setOf(1, 2, 3, 4, 5, 6, 7),
+        originStationId = solution.originStationId,
+        originStationName = solution.originStationName,
+        destinationStationName = solution.destinationStationName,
+        scheduledDepartureTime = solution.departureTimeFormatted,
         isEnabled = true,
-        monitoredStops = autoMonitoredStops
+        legs = savedLegs
     )
 
     liveManager.saveLiveTrain(newConfig)
 
-    // Pianificazione intelligente dell'allarme invece di avviare prematuramente la notifica se la partenza è futura
     LiveTrainScheduler.scheduleAlarmsAndCheckActiveTrains(context)
 
     Toast.makeText(
         context,
-        "Treno ${departure.trainNumber} programmato nel Live Tracker per i suoi giorni di circolazione!",
+        "Soluzione $primaryTrainNum salvata nel Live Tracker!",
         Toast.LENGTH_LONG
     ).show()
 
@@ -1260,25 +1236,18 @@ fun LiveTrackerScreen(
     var isAdding by remember { mutableStateOf(false) }
     var addError by remember { mutableStateOf<String?>(null) }
 
-    // Gestione Selezione Fermate Monitorate
     var selectedConfigForStops by remember { mutableStateOf<LiveTrainConfig?>(null) }
-
-    // Gestione Modifica Giorni Monitorati del Treno Programmato
     var selectedConfigForDays by remember { mutableStateOf<LiveTrainConfig?>(null) }
-
-    // Gestione Banner Suggerimento Impostazioni Samsung Dismissable
     var isSamsungHintDismissed by remember { mutableStateOf(liveManager.isSamsungHintDismissed()) }
 
     val coroutineScope = rememberCoroutineScope()
 
-    // Ricarica automaticamente la lista dei treni programmati ogni volta che la schermata diventa visibile
     LaunchedEffect(isVisible) {
         if (isVisible) {
             liveTrains = liveManager.getLiveTrains()
         }
     }
 
-    // Dialog selezione fermate monitorate (fino a 4 fermate)
     selectedConfigForStops?.let { config ->
         MonitoredStopsSelectionDialog(
             config = config,
@@ -1288,7 +1257,6 @@ fun LiveTrackerScreen(
                 liveTrains = liveManager.saveLiveTrain(updatedConfig)
                 selectedConfigForStops = null
 
-                // Invia refresh immediato alla notifica Live attiva
                 val refreshIntent = Intent(context, TrainTrackerForegroundService::class.java).apply {
                     action = TrainTrackerForegroundService.ACTION_REFRESH_NOTIF
                 }
@@ -1301,7 +1269,6 @@ fun LiveTrackerScreen(
         )
     }
 
-    // Dialog modifica giorni monitorati per un treno già programmato
     selectedConfigForDays?.let { config ->
         EditDaysSelectionDialog(
             config = config,
@@ -1316,7 +1283,6 @@ fun LiveTrackerScreen(
         )
     }
 
-    // Gestione Permesso Notifiche Android 13+
     var hasNotificationPermission by remember {
         mutableStateOf(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -1338,7 +1304,6 @@ fun LiveTrackerScreen(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        // Pianifica gli allarmi esatti ed avvia il tracciamento solo per treni attivi ora
         LiveTrainScheduler.scheduleAlarmsAndCheckActiveTrains(context)
     }
 
@@ -1379,9 +1344,8 @@ fun LiveTrackerScreen(
             isAdding = true
 
             coroutineScope.launch {
-                // Rileva automaticamente i giorni della settimana in cui il treno circola
                 val detectedDays = ViaggiaTrenoService.detectRunningDaysForTrain(cleanNum)
-                selectedDays = detectedDays // Sincronizza i selettori a schermo con i giorni rilevati!
+                selectedDays = detectedDays
 
                 when (val resolveRes = ViaggiaTrenoService.resolveTrain(cleanNum)) {
                     is ViaggiaTrenoResult.Success -> {
@@ -1392,7 +1356,7 @@ fun LiveTrackerScreen(
                                 val newConfig = LiveTrainConfig(
                                     id = UUID.randomUUID().toString(),
                                     trainNumber = num,
-                                    daysOfWeek = detectedDays, // Usiamo i giorni rilevati automaticamente dalle API!
+                                    daysOfWeek = detectedDays,
                                     originStationId = stationId,
                                     originStationName = status.originStationName,
                                     destinationStationName = status.destinationStationName,
@@ -1445,7 +1409,6 @@ fun LiveTrackerScreen(
             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
         )
 
-        // Banner di suggerimento per le Impostazioni Notifiche Live Samsung One UI (Dismissable ✖)
         AnimatedVisibility(
             visible = !isSamsungHintDismissed,
             enter = fadeIn(),
@@ -1533,7 +1496,6 @@ fun LiveTrackerScreen(
             }
         }
 
-        // AGGIUNTA RAPIDA DAI PREFERITI
         if (favoriteTrains.isNotEmpty()) {
             Text(
                 text = "AGGIUNGI RAPIDO DAI MIEI PREFERITI",
@@ -1586,7 +1548,6 @@ fun LiveTrackerScreen(
             }
         }
 
-        // CARD PER AGGIUNGERE UN TRENO AL LIVE TRACKER
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
@@ -1626,7 +1587,6 @@ fun LiveTrackerScreen(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Pulsanti Selettori Giorni Settimana
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1704,7 +1664,7 @@ fun LiveTrackerScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "TRENI PROGRAMMATI (${liveTrains.size})",
+            text = "SOLUZIONI PROGRAMMATE (${liveTrains.size})",
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
@@ -1718,7 +1678,7 @@ fun LiveTrackerScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Nessun treno salvato nel Live Tracker. Aggiungi il numero del tuo treno pendolare sopra per attivare le notifiche automatiche nei giorni selezionati.",
+                    text = "Nessun treno o soluzione salvata nel Live Tracker. Aggiungi un treno o una soluzione di viaggio con cambi sopra per attivare le notifiche automatiche.",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp)
@@ -1726,6 +1686,8 @@ fun LiveTrackerScreen(
             }
         } else {
             liveTrains.forEach { config ->
+                val effLegs = config.getEffectiveLegs()
+
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1740,11 +1702,31 @@ fun LiveTrackerScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Treno ${config.trainNumber}",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = if (effLegs.size > 1) "Soluzione ${config.getDisplayTrainNumbers()}" else "Treno ${config.trainNumber}",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (effLegs.size > 1) {
+                                        Surface(
+                                            color = Color(0xFFE65100).copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text(
+                                                text = "${effLegs.size - 1} Cambio",
+                                                color = Color(0xFFE65100),
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 10.sp,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1774,7 +1756,6 @@ fun LiveTrackerScreen(
                                     )
                                 }
 
-                                // Testo Giorni Selezionati Cliccabile per Modifica
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1805,40 +1786,71 @@ fun LiveTrackerScreen(
                                     liveTrains = liveManager.toggleTrainEnabled(config.id)
                                     LiveTrainScheduler.scheduleAlarmsAndCheckActiveTrains(context)
                                     if (!isChecked) {
-                                        TrainTrackerForegroundService.stopService(context, config.trainNumber)
+                                        effLegs.forEach { leg ->
+                                            TrainTrackerForegroundService.stopService(context, leg.trainNumber)
+                                        }
                                     }
                                 }
                             )
                         }
 
-                        // Pulsante Opzionale Selezione Fermate Monitorate
-                        OutlinedButton(
-                            onClick = {
-                                selectedConfigForStops = config
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 10.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Place,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = if (config.monitoredStops.isEmpty()) {
-                                        "Imposta Fermate sulla Barra (Opzionale)"
-                                    } else {
-                                        "Fermate Monitorate (${config.monitoredStops.size}/4)"
-                                    },
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                        // MOSTRA I DETTAGLI DELLE SINGOLE TRATTE PER SOLUZIONI CON CAMBI
+                        if (effLegs.size > 1) {
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp))
+                            Text(
+                                text = "TRATTE COMPONENTI:",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(bottom = 6.dp)
+                            )
+
+                            effLegs.forEachIndexed { idx, leg ->
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 6.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Tratta ${idx + 1}: ${leg.category} ${leg.trainNumber}",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "${leg.originStationName} (${leg.scheduledDepartureTime}) ➔ ${leg.destinationStationName}",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+
+                                        IconButton(
+                                            onClick = {
+                                                TrainTrackerForegroundService.startService(
+                                                    context = context,
+                                                    trainNumber = leg.trainNumber,
+                                                    stationId = leg.originStationId
+                                                )
+                                            },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = "Avvia Tratta",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -1851,11 +1863,13 @@ fun LiveTrackerScreen(
                         ) {
                             Button(
                                 onClick = {
-                                    TrainTrackerForegroundService.startService(
-                                        context = context,
-                                        trainNumber = config.trainNumber,
-                                        stationId = config.originStationId
-                                    )
+                                    effLegs.forEach { leg ->
+                                        TrainTrackerForegroundService.startService(
+                                            context = context,
+                                            trainNumber = leg.trainNumber,
+                                            stationId = leg.originStationId
+                                        )
+                                    }
                                 },
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                 shape = RoundedCornerShape(12.dp)
@@ -1869,13 +1883,19 @@ fun LiveTrackerScreen(
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp)
                                     )
-                                    Text("Avvia Notifica Ora", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = if (effLegs.size > 1) "Avvia Notifiche Ora" else "Avvia Notifica Ora",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
 
                             TextButton(onClick = {
                                 liveTrains = liveManager.removeLiveTrain(config.id)
-                                TrainTrackerForegroundService.stopService(context, config.trainNumber)
+                                effLegs.forEach { leg ->
+                                    TrainTrackerForegroundService.stopService(context, leg.trainNumber)
+                                }
                             }) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -1955,7 +1975,6 @@ fun LiveTrackerScreen(
                             isMediaSessionBypass = checked
                             liveManager.setMediaSessionBypassEnabled(checked)
 
-                            // Invia il segnale di refresh immediato al ForegroundService attivo
                             val refreshIntent = Intent(context, TrainTrackerForegroundService::class.java).apply {
                                 action = TrainTrackerForegroundService.ACTION_REFRESH_NOTIF
                             }
@@ -1994,7 +2013,7 @@ fun EditDaysSelectionDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "📅 Modifica Giorni Treno ${config.trainNumber}",
+                text = "📅 Modifica Giorni ${config.getDisplayTrainNumbers()}",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -2002,7 +2021,7 @@ fun EditDaysSelectionDialog(
         text = {
             Column {
                 Text(
-                    text = "Seleziona i giorni nei quali attivare il tracciamento automatico del treno:",
+                    text = "Seleziona i giorni nei quali attivare il tracciamento automatico della soluzione:",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 12.dp)
@@ -2117,7 +2136,7 @@ fun MonitoredStopsSelectionDialog(
         title = {
             Column {
                 Text(
-                    text = "📍 Fermate Monitorate Treno ${config.trainNumber}",
+                    text = "📍 Fermate Monitorate ${config.getDisplayTrainNumbers()}",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -2254,7 +2273,7 @@ fun TrainStatusCard(
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
 
-            // 1. RIGA SUPERIORE: Badge Ritardo (sinistra) + Pulsante Chiudi Compatto ✖ (destra)
+            // 1. RIGA SUPERIORE: Badge Ritardo + Pulsante Chiudi
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -2361,7 +2380,6 @@ fun TrainStatusCard(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // Ultimo Rilevamento
             Text(
                 text = "ULTIMO RILEVAMENTO",
                 fontSize = 11.sp,
@@ -2377,7 +2395,6 @@ fun TrainStatusCard(
                 modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
             )
 
-            // Prossima Fermata
             status.nextStop?.let { next ->
                 val nextPlat = (next.actualPlatform ?: next.scheduledPlatform)?.takeIf { !it.equals("null", ignoreCase = true) && it.isNotBlank() }
 
@@ -2425,7 +2442,6 @@ fun TrainStatusCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Barra di Progresso Avanzamento Viaggio
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -2453,7 +2469,6 @@ fun TrainStatusCard(
                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
             )
 
-            // Evidenziazione Tratta Utente con Binari di Salita e Discesa
             if (userBoardingStation.isNotBlank() || userAlightingStation.isNotBlank()) {
                 val stopsCount = status.stops.size
                 if (stopsCount > 1) {
@@ -2545,7 +2560,6 @@ fun TrainStatusCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Pulsante Programma nel Live Tracker nella Scheda Dettaglio Treno Cerca per Numero
             Button(
                 onClick = {
                     coroutineScope.launch {
@@ -2589,14 +2603,12 @@ fun TrainStatusCard(
                         }
 
                         val departureTimeLocal = status.stops.firstOrNull()?.scheduledTimeMs?.let { formatTime(it) } ?: ""
-
-                        // Rileva automaticamente i giorni della settimana in cui il treno circola
                         val detectedDays = ViaggiaTrenoService.detectRunningDaysForTrain(status.trainNumber)
 
                         val newConfig = LiveTrainConfig(
                             id = UUID.randomUUID().toString(),
                             trainNumber = status.trainNumber,
-                            daysOfWeek = detectedDays, // Usiamo i giorni rilevati dalle API!
+                            daysOfWeek = detectedDays,
                             originStationId = "",
                             originStationName = status.originStationName,
                             destinationStationName = status.destinationStationName,
@@ -2610,7 +2622,7 @@ fun TrainStatusCard(
 
                         Toast.makeText(
                             context,
-                            "Treno ${status.trainNumber} salvato nel Live Tracker per i suoi giorni di circolazione!",
+                            "Treno ${status.trainNumber} salvato nel Live Tracker!",
                             Toast.LENGTH_LONG
                         ).show()
 

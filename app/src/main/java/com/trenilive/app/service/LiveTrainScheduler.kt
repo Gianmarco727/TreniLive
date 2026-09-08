@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import com.trenilive.app.data.LiveTrainConfig
+import com.trenilive.app.data.LiveTrainLeg
 import com.trenilive.app.data.LiveTrainManager
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -73,12 +74,12 @@ object LiveTrainScheduler {
     }
 
     /**
-     * Calcola il prossimo orario di avvio con 15 minuti di preavviso rispetto all'orario di partenza.
+     * Calcola il prossimo orario di avvio con 15 minuti di preavviso per una specifica tratta.
      */
-    fun calculateNextAlarmTimeMs(config: LiveTrainConfig): Long? {
+    fun calculateNextAlarmTimeMsForLeg(leg: LiveTrainLeg, config: LiveTrainConfig): Long? {
         if (!config.isEnabled || config.daysOfWeek.isEmpty()) return null
 
-        val (hour, minute) = parseDepartureTime(config.scheduledDepartureTime) ?: Pair(6, 0)
+        val (hour, minute) = parseDepartureTime(leg.scheduledDepartureTime) ?: Pair(6, 0)
         val nowMs = System.currentTimeMillis()
 
         for (dayOffset in 0..7) {
@@ -102,16 +103,21 @@ object LiveTrainScheduler {
         return null
     }
 
+    fun calculateNextAlarmTimeMs(config: LiveTrainConfig): Long? {
+        val firstLeg = config.getEffectiveLegs().firstOrNull() ?: return null
+        return calculateNextAlarmTimeMsForLeg(firstLeg, config)
+    }
+
     /**
-     * Verifica se un treno è nella sua finestra di viaggio attuale (da 15 min prima della partenza a fine corsa).
+     * Verifica se una specifica tratta è nella sua finestra di viaggio attuale.
      */
-    fun isTrainInActiveWindow(config: LiveTrainConfig, context: Context): Boolean {
+    fun isLegInActiveWindow(leg: LiveTrainLeg, config: LiveTrainConfig, context: Context): Boolean {
         if (!config.isEnabled || config.daysOfWeek.isEmpty()) return false
 
         val liveManager = LiveTrainManager(context)
-        if (liveManager.isStoppedForToday(config.trainNumber)) return false
+        if (liveManager.isStoppedForToday(leg.trainNumber)) return false
 
-        val (hour, minute) = parseDepartureTime(config.scheduledDepartureTime) ?: return true
+        val (hour, minute) = parseDepartureTime(leg.scheduledDepartureTime) ?: return true
         val now = Calendar.getInstance()
         val currentDayOfWeek = now.get(Calendar.DAY_OF_WEEK)
 
@@ -131,9 +137,13 @@ object LiveTrainScheduler {
         return nowMs in windowStartMs..windowEndMs
     }
 
+    fun isTrainInActiveWindow(config: LiveTrainConfig, context: Context): Boolean {
+        return config.getEffectiveLegs().any { isLegInActiveWindow(it, config, context) }
+    }
+
     /**
-     * Programma gli allarmi esatti con AlarmManager ed avvia il tracciamento
-     * SOLO per i treni che sono attualmente nella loro finestra di partenza odierna e NON interrotti dall'utente.
+     * Programma gli allarmi esatti con AlarmManager ed avvia il tracciamento per ogni tratta componente
+     * dei treni attivi nella loro finestra di partenza odierna.
      */
     fun scheduleAlarmsAndCheckActiveTrains(context: Context) {
         val manager = LiveTrainManager(context)
@@ -141,69 +151,71 @@ object LiveTrainScheduler {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
 
         liveTrains.filter { it.isEnabled }.forEach { config ->
-            // 1. Se il treno è nella sua finestra di viaggio odierna e non è stato interrotto oggi, avvia subito il tracciamento
-            if (isTrainInActiveWindow(config, context)) {
-                Log.d("LiveTrainScheduler", "Treno ${config.trainNumber} nella finestra attiva: avvio servizio tracciamento.")
-                TrainTrackerForegroundService.startService(
-                    context = context,
-                    trainNumber = config.trainNumber,
-                    stationId = config.originStationId
-                )
-            }
-
-            // 2. Programma l'allarme per il prossimo orario di avvio con preavviso
-            val nextAlarmMs = calculateNextAlarmTimeMs(config)
-            if (nextAlarmMs != null && alarmManager != null) {
-                val intent = Intent(context, AlarmReceiver::class.java).apply {
-                    action = ACTION_START_TRAIN_ALARM
-                    putExtra(EXTRA_TRAIN_NUMBER, config.trainNumber)
-                    putExtra(EXTRA_STATION_ID, config.originStationId)
+            config.getEffectiveLegs().forEach { leg ->
+                // 1. Se la specifica tratta è nella sua finestra di viaggio odierna, avvia subito il tracciamento
+                if (isLegInActiveWindow(leg, config, context)) {
+                    Log.d("LiveTrainScheduler", "Treno ${leg.trainNumber} (Tratta ${leg.legIndex + 1}) nella finestra attiva: avvio servizio tracciamento.")
+                    TrainTrackerForegroundService.startService(
+                        context = context,
+                        trainNumber = leg.trainNumber,
+                        stationId = leg.originStationId
+                    )
                 }
-                val pendingIntent = PendingIntent.getBroadcast(
-                    context,
-                    getAlarmReqCode(config.trainNumber),
-                    intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
 
-                try {
-                    val canScheduleExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        alarmManager.canScheduleExactAlarms()
-                    } else true
+                // 2. Programma l'allarme per il prossimo orario di avvio con preavviso per la specifica tratta
+                val nextAlarmMs = calculateNextAlarmTimeMsForLeg(leg, config)
+                if (nextAlarmMs != null && alarmManager != null) {
+                    val intent = Intent(context, AlarmReceiver::class.java).apply {
+                        action = ACTION_START_TRAIN_ALARM
+                        putExtra(EXTRA_TRAIN_NUMBER, leg.trainNumber)
+                        putExtra(EXTRA_STATION_ID, leg.originStationId)
+                    }
+                    val pendingIntent = PendingIntent.getBroadcast(
+                        context,
+                        getAlarmReqCode(leg.trainNumber),
+                        intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
 
-                    if (canScheduleExact) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            alarmManager.setExactAndAllowWhileIdle(
-                                AlarmManager.RTC_WAKEUP,
-                                nextAlarmMs,
-                                pendingIntent
-                            )
+                    try {
+                        val canScheduleExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            alarmManager.canScheduleExactAlarms()
+                        } else true
+
+                        if (canScheduleExact) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                alarmManager.setExactAndAllowWhileIdle(
+                                    AlarmManager.RTC_WAKEUP,
+                                    nextAlarmMs,
+                                    pendingIntent
+                                )
+                            } else {
+                                alarmManager.setExact(
+                                    AlarmManager.RTC_WAKEUP,
+                                    nextAlarmMs,
+                                    pendingIntent
+                                )
+                            }
                         } else {
-                            alarmManager.setExact(
+                            alarmManager.setAndAllowWhileIdle(
                                 AlarmManager.RTC_WAKEUP,
                                 nextAlarmMs,
                                 pendingIntent
                             )
                         }
-                    } else {
-                        alarmManager.setAndAllowWhileIdle(
-                            AlarmManager.RTC_WAKEUP,
-                            nextAlarmMs,
-                            pendingIntent
-                        )
-                    }
-                    val formattedDate = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.ITALY).format(Date(nextAlarmMs))
-                    Log.d("LiveTrainScheduler", "Alarm programmato con successo per Treno ${config.trainNumber} alle $formattedDate")
-                } catch (e: Exception) {
-                    Log.e("LiveTrainScheduler", "Errore impostazione allarme esatto: ${e.message}, tentato fallback setAndAllowWhileIdle")
-                    try {
-                        alarmManager.setAndAllowWhileIdle(
-                            AlarmManager.RTC_WAKEUP,
-                            nextAlarmMs,
-                            pendingIntent
-                        )
-                    } catch (e2: Exception) {
-                        e2.printStackTrace()
+                        val formattedDate = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.ITALY).format(Date(nextAlarmMs))
+                        Log.d("LiveTrainScheduler", "Alarm programmato con successo per Treno ${leg.trainNumber} alle $formattedDate")
+                    } catch (e: Exception) {
+                        Log.e("LiveTrainScheduler", "Errore impostazione allarme esatto: ${e.message}, tentato fallback setAndAllowWhileIdle")
+                        try {
+                            alarmManager.setAndAllowWhileIdle(
+                                AlarmManager.RTC_WAKEUP,
+                                nextAlarmMs,
+                                pendingIntent
+                            )
+                        } catch (e2: Exception) {
+                            e2.printStackTrace()
+                        }
                     }
                 }
             }
