@@ -31,7 +31,8 @@ data class TrainLeg(
     val departureTimestampMs: Long = 0L,
     val arrivalTimestampMs: Long = 0L,
     val delayMinutes: Int = 0,
-    val platform: String? = null
+    val platform: String? = null,
+    val status: TrainStatus? = null
 )
 
 data class RouteSolution(
@@ -72,13 +73,8 @@ object ViaggiaTrenoService {
 
     private val AUTOCOMPLETE_REGEX = """(\d+)-([A-Z0-9]+)-(\d+)""".toRegex()
 
-    // Cache in memoria per l'autocompletamento stazioni (0ms)
     private val autocompleteCache = ConcurrentHashMap<String, List<StationInfo>>()
-
-    // Cache in memoria per la risoluzione dei treni (0ms)
     private val resolveTrainCache = ConcurrentHashMap<String, Triple<String, String, String>>()
-
-    // Cache volatile in memoria per lo stato dei treni (30s TTL)
     private val trainStatusCache = ConcurrentHashMap<String, Pair<Long, TrainStatus>>()
     private const val CACHE_TTL_MS = 30_000L
 
@@ -96,7 +92,6 @@ object ViaggiaTrenoService {
 
     private fun isMajorJunctionStation(stationName: String): Boolean {
         val norm = normalizeStationName(stationName)
-        // Esclude fermate locali/suburbane minori (es. Ospedale, Gazzera, Marghera, Aeroporto) che non sono hub di scambio
         if (norm.contains("OSPEDALE") || norm.contains("GAZZERA") || norm.contains("AEROPORTO") || norm.contains("MARGHERA") || norm.contains("FIERA")) {
             return false
         }
@@ -120,10 +115,6 @@ object ViaggiaTrenoService {
         }
     }
 
-    /**
-     * Verifica prima del download di rete se la destinazione finale dichiarata dal treno
-     * è coerente con la direzione cercata (es. per Bologna esclude treni diretti ad Adria/Udine/Trieste/Bassano).
-     */
     private fun isDestinationTowardsTarget(trainDestination: String, queryDestination: String): Boolean {
         val normTrainDest = normalizeStationName(trainDestination)
         val normQueryDest = normalizeStationName(queryDestination)
@@ -168,10 +159,6 @@ object ViaggiaTrenoService {
         return true
     }
 
-    /**
-     * Confronta due stazioni per nome o ID gestendo abbreviazioni Trenitalia, codici stazione AV
-     * e distinguendo accuratamente le diverse stazioni della stessa città (es. Venezia Mestre vs Venezia S.Lucia).
-     */
     fun matchesStation(stopName: String, stopId: String, queryName: String, queryId: String): Boolean {
         val cleanStopId = stopId.removePrefix("S").removePrefix("s").trim()
         val cleanQueryId = queryId.removePrefix("S").removePrefix("s").trim()
@@ -776,7 +763,8 @@ object ViaggiaTrenoService {
                                 departureTimestampMs = depMs,
                                 arrivalTimestampMs = arrMs,
                                 delayMinutes = status.delayMinutes,
-                                platform = dep.platform
+                                platform = dep.platform,
+                                status = status
                             )
 
                             directSolutions.add(
@@ -826,7 +814,6 @@ object ViaggiaTrenoService {
                     continue
                 }
 
-                // Prendi solo i primi 12 treni di partenza reali dell'ora
                 val departuresWithStatus = rawDepartures.take(12).map { dep ->
                     async {
                         val status = fetchTrainStatusDirectOrResolve(dep, currentSearchDate)
@@ -872,7 +859,6 @@ object ViaggiaTrenoService {
                             }
                         }
 
-                        // OTTIMIZZAZIONE FONDAMENTALE: Filtra i treni di Leg 2 per destinazione PRIMA del download via rete!
                         val candidateLeg2Departures = leg2Departures
                             .distinctBy { it.trainNumber }
                             .filter { isDestinationTowardsTarget(it.destination, cleanDestName) }
@@ -936,7 +922,8 @@ object ViaggiaTrenoService {
                                             departureTimestampMs = leg1DepMs,
                                             arrivalTimestampMs = leg1ArrMs,
                                             delayMinutes = status.delayMinutes,
-                                            platform = dep.platform
+                                            platform = dep.platform,
+                                            status = status
                                         )
 
                                         val leg2 = TrainLeg(
@@ -952,7 +939,8 @@ object ViaggiaTrenoService {
                                             departureTimestampMs = leg2DepMs,
                                             arrivalTimestampMs = leg2ArrMs,
                                             delayMinutes = leg2Status.delayMinutes,
-                                            platform = leg2Dep.platform
+                                            platform = leg2Dep.platform,
+                                            status = leg2Status
                                         )
 
                                         Log.d("RouteSearch", ">>> AGGIUNTA SOLUZIONE CON CAMBIO: ${leg1.trainNumber} + ${leg2.trainNumber} (${leg1.departureTimeFormatted} -> ${leg2.arrivalTimeFormatted})")

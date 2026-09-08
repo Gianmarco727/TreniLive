@@ -877,7 +877,7 @@ fun TrainTrackerScreen(
             }
         }
 
-        // LISTA SOLUZIONI TROVATE (ESPANSIBILI CON PULSANTE PROGRAMMAZIONE SOLO AD ESPANSIONE)
+        // LISTA SOLUZIONI TROVATE (CON DETTAGLI REALI COMPLETI AD ESPANSIONE DELLA SCHEDA DIRETTA)
         if (routeSolutions.isNotEmpty() && !isLoading) {
             Spacer(modifier = Modifier.height(20.dp))
             Text(
@@ -912,7 +912,7 @@ fun TrainTrackerScreen(
                             .padding(16.dp)
                             .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
                     ) {
-                        // INTESTAZIONE CARD (SIA DIRETTI CHE CAMBI)
+                        // INTESTAZIONE CARD
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -968,7 +968,7 @@ fun TrainTrackerScreen(
                             }
                         }
 
-                        // VISTA ESPANSA DELLE TRATTE COMPONENTI E DEL PULSANTE PROGRAMMAZIONE (SOLO SE ESPANSO)
+                        // VISTA ESPANSA DELLA CARD (DETTAGLI IN TEMPO REALE COMPLETI)
                         AnimatedVisibility(
                             visible = isExpanded,
                             enter = fadeIn(),
@@ -978,57 +978,229 @@ fun TrainTrackerScreen(
                                 HorizontalDivider(modifier = Modifier.padding(bottom = 12.dp))
 
                                 if (isDirect && singleLeg != null) {
-                                    // DETTAGLI COMPLETI PER TRENO DIRETTO
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                        shape = RoundedCornerShape(14.dp),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(bottom = 12.dp)
-                                    ) {
-                                        Column(modifier = Modifier.padding(14.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "${singleLeg.category} ${singleLeg.trainNumber}",
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 16.sp,
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
+                                    val legStatus = singleLeg.status
 
-                                                singleLeg.platform?.let { plat ->
-                                                    Surface(
-                                                        color = Color(0xFF2E7D32).copy(alpha = 0.15f),
-                                                        shape = RoundedCornerShape(8.dp)
-                                                    ) {
-                                                        Text(
-                                                            text = "Binario $plat",
-                                                            fontSize = 12.sp,
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = Color(0xFF2E7D32),
-                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                                        )
-                                                    }
-                                                }
+                                    if (legStatus != null) {
+                                        // 1. INFO RITARDO E STATO REALE
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            val (delayColor, delayText) = when {
+                                                legStatus.isCancelled -> Color(0xFFD32F2F) to "SOPPRESSO"
+                                                legStatus.delayMinutes > 0 -> Color(0xFFE65100) to "+${legStatus.delayMinutes} min"
+                                                legStatus.delayMinutes < 0 -> Color(0xFF2E7D32) to "${legStatus.delayMinutes} min"
+                                                else -> Color(0xFF2E7D32) to "IN ORARIO"
                                             }
 
-                                            Spacer(modifier = Modifier.height(6.dp))
-
                                             Text(
-                                                text = "Partenza: ${singleLeg.originStationName} (${singleLeg.departureTimeFormatted})",
-                                                fontSize = 13.sp,
+                                                text = "STATO IN TEMPO REALE",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+
+                                            Surface(
+                                                color = delayColor.copy(alpha = 0.15f),
+                                                shape = RoundedCornerShape(20.dp),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, delayColor)
+                                            ) {
+                                                Text(
+                                                    text = delayText,
+                                                    color = delayColor,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.sp,
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        // 2. ULTIMO RILEVAMENTO
+                                        Text(
+                                            text = "ULTIMO RILEVAMENTO",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                        Text(
+                                            text = legStatus.lastDetectedStation,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.padding(top = 1.dp, bottom = 10.dp)
+                                        )
+
+                                        // 3. PROSSIMA FERMATA + BINARIO
+                                        legStatus.nextStop?.let { next ->
+                                            val nextPlat = (next.actualPlatform ?: next.scheduledPlatform)?.takeIf { !it.equals("null", ignoreCase = true) && it.isNotBlank() }
+
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                                shape = RoundedCornerShape(14.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = "PROSSIMA FERMATA",
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                        Text(
+                                                            text = next.stationName,
+                                                            fontSize = 15.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                        )
+                                                        nextPlat?.let { platform ->
+                                                            Text(
+                                                                text = "Binario: $platform",
+                                                                fontSize = 11.sp,
+                                                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                                            )
+                                                        }
+                                                    }
+
+                                                    Text(
+                                                        text = formatTime(next.actualOrEstimatedTimeMs),
+                                                        fontSize = 18.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                        }
+
+                                        // 4. BARRA DI PROGRESSO AVANZAMENTO TRENO
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "Avanzamento Treno Totale",
+                                                fontSize = 11.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                             Text(
-                                                text = "Arrivo: ${singleLeg.destinationStationName} (${singleLeg.arrivalTimeFormatted})",
-                                                fontSize = 13.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(top = 2.dp)
+                                                text = "${legStatus.progressPercentage}%",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
                                             )
                                         }
+
+                                        LinearProgressIndicator(
+                                            progress = { legStatus.progressPercentage / 100f },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(6.dp)
+                                                .padding(top = 4.dp),
+                                            color = Color(0xFFC8102E),
+                                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        )
+
+                                        Spacer(modifier = Modifier.height(12.dp))
+
+                                        // 5. TRATTA SELEZIONATA (SALITA E DISCESA CON ENTRAMBI I BINARI)
+                                        val stopsCount = legStatus.stops.size
+                                        if (stopsCount > 1) {
+                                            val boardingIdx = legStatus.stops.indexOfFirst {
+                                                ViaggiaTrenoService.matchesStation(it.stationName, it.stationId, singleLeg.originStationName, singleLeg.originStationId)
+                                            }.takeIf { it >= 0 } ?: 0
+
+                                            val alightingIdx = legStatus.stops.indexOfFirst {
+                                                ViaggiaTrenoService.matchesStation(it.stationName, it.stationId, singleLeg.destinationStationName, singleLeg.destinationStationId)
+                                            }.takeIf { it >= 0 } ?: (stopsCount - 1)
+
+                                            val boardingStop = legStatus.stops.getOrNull(boardingIdx)
+                                            val alightingStop = legStatus.stops.getOrNull(alightingIdx)
+
+                                            val rawBoardingPlat = boardingStop?.actualPlatform ?: boardingStop?.scheduledPlatform ?: singleLeg.platform
+                                            val rawAlightingPlat = alightingStop?.actualPlatform ?: alightingStop?.scheduledPlatform
+
+                                            val boardingPlatform = rawBoardingPlat?.takeIf { !it.equals("null", ignoreCase = true) && it.isNotBlank() }
+                                            val alightingPlatform = rawAlightingPlat?.takeIf { !it.equals("null", ignoreCase = true) && it.isNotBlank() }
+
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                                                shape = RoundedCornerShape(14.dp),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Column(modifier = Modifier.padding(12.dp)) {
+                                                    Text(
+                                                        text = "TRATTA SELEZIONATA",
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.secondary
+                                                    )
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = "Salita: ${boardingStop?.stationName ?: singleLeg.originStationName} (${singleLeg.departureTimeFormatted})",
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                        )
+                                                        boardingPlatform?.let { p ->
+                                                            Text(
+                                                                text = "Binario $p",
+                                                                fontSize = 12.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = Color(0xFF2E7D32)
+                                                            )
+                                                        }
+                                                    }
+
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = "Discesa: ${alightingStop?.stationName ?: singleLeg.destinationStationName} (${singleLeg.arrivalTimeFormatted})",
+                                                            fontSize = 12.sp,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                        )
+                                                        alightingPlatform?.let { p ->
+                                                            Text(
+                                                                text = "Binario $p",
+                                                                fontSize = 12.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = Color(0xFF2E7D32)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        // Fallback minimale se lo stato non era caricato
+                                        Text(
+                                            text = "Partenza: ${singleLeg.originStationName} (${singleLeg.departureTimeFormatted})",
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = "Arrivo: ${singleLeg.destinationStationName} (${singleLeg.arrivalTimeFormatted})",
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
                                     }
                                 } else {
                                     // DETTAGLI PER SOLUZIONE CON CAMBI (1+ CAMBI)
@@ -2525,11 +2697,11 @@ fun TrainStatusCard(
                 val stopsCount = status.stops.size
                 if (stopsCount > 1) {
                     val boardingIdx = status.stops.indexOfFirst {
-                        it.stationName.contains(userBoardingStation, ignoreCase = true)
+                        ViaggiaTrenoService.matchesStation(it.stationName, it.stationId, userBoardingStation, "")
                     }.takeIf { it >= 0 } ?: 0
 
                     val alightingIdx = status.stops.indexOfFirst {
-                        it.stationName.contains(userAlightingStation, ignoreCase = true)
+                        ViaggiaTrenoService.matchesStation(it.stationName, it.stationId, userAlightingStation, "")
                     }.takeIf { it >= 0 } ?: (stopsCount - 1)
 
                     val boardingStop = status.stops.getOrNull(boardingIdx)
@@ -2621,11 +2793,11 @@ fun TrainStatusCard(
                         val totalStopsCount = status.stops.size
                         if (totalStopsCount > 1) {
                             val boardingIdx = status.stops.indexOfFirst {
-                                it.stationName.contains(userBoardingStation, ignoreCase = true)
+                                ViaggiaTrenoService.matchesStation(it.stationName, it.stationId, userBoardingStation, "")
                             }.takeIf { it >= 0 } ?: 0
 
                             val alightingIdx = status.stops.indexOfFirst {
-                                it.stationName.contains(userAlightingStation, ignoreCase = true)
+                                ViaggiaTrenoService.matchesStation(it.stationName, it.stationId, userAlightingStation, "")
                             }.takeIf { it >= 0 } ?: (totalStopsCount - 1)
 
                             val boardingStop = status.stops.getOrNull(boardingIdx)
