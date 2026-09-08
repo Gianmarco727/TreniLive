@@ -94,6 +94,33 @@ object ViaggiaTrenoService {
     }
 
     /**
+     * Verifica se una stazione di cambio è geograficamente coerente rispetto alla destinazione finale,
+     * evitando deviazioni illogiche (es. andare a Trieste per raggiungere Bologna).
+     */
+    private fun isValidTransferHub(junctionName: String, originName: String, destName: String): Boolean {
+        val normJunction = normalizeStationName(junctionName)
+        val normOrigin = normalizeStationName(originName)
+        val normDest = normalizeStationName(destName)
+
+        if (normJunction.contains(normOrigin) || normOrigin.contains(normJunction)) return false
+        if (normJunction.contains(normDest) || normDest.contains(normJunction)) return false
+
+        // Se la destinazione è verso Sud (Bologna, Firenze, Roma, Napoli):
+        if (normDest.contains("BOLOGNA") || normDest.contains("ROMA") || normDest.contains("FIRENZE") || normDest.contains("NAPOLI")) {
+            val disallowed = listOf("TRIESTE", "UDINE", "GORIZIA", "PORDENONE", "MILANO", "TORINO", "GENOVA")
+            if (disallowed.any { normJunction.contains(it) }) return false
+        }
+
+        // Se la destinazione è verso Nord-Est (Pordenone, Udine, Trieste):
+        if (normDest.contains("PORDENONE") || normDest.contains("UDINE") || normDest.contains("TRIESTE")) {
+            val disallowed = listOf("VICENZA", "VERONA", "MILANO", "BOLOGNA", "FERRARA", "ROVIGO")
+            if (disallowed.any { normJunction.contains(it) }) return false
+        }
+
+        return true
+    }
+
+    /**
      * Confronta due stazioni per nome o ID gestendo abbreviazioni Trenitalia e codici stazione AV.
      */
     fun matchesStation(stopName: String, stopId: String, queryName: String, queryId: String): Boolean {
@@ -566,7 +593,7 @@ object ViaggiaTrenoService {
     /**
      * Cerca i treni e le soluzioni con o senza cambi tra una stazione di partenza e una di arrivo.
      * Fase 1: Cerca le soluzioni DIRETTE su più finestre orarie. Se esistono, le restituisce in via esclusiva.
-     * Fase 2: Solo se NON esistono treni diretti, effettua la ricerca delle soluzioni con cambio su stazioni di snodo.
+     * Fase 2: Solo se NON esistono treni diretti, effettua la ricerca delle soluzioni con cambio su stazioni di snodo geograficamente coerenti.
      */
     suspend fun fetchRouteSolutionsWithTransfers(
         originStationId: String,
@@ -758,18 +785,31 @@ object ViaggiaTrenoService {
                         if (status.isCancelled || status.progressPercentage >= 100 || boardingStop.isPassed) continue
                     }
 
-                    // Seleziona solo le fermate di snodo principali successive alla stazione di partenza
-                    val candidateJunctionStops = stops.drop(originIdx + 1).filter { isMajorJunctionStation(it.stationName) }.take(5)
+                    // Seleziona solo le fermate di snodo principali e geograficamente coerenti per la destinazione
+                    val candidateJunctionStops = stops.drop(originIdx + 1)
+                        .filter { isMajorJunctionStation(it.stationName) && isValidTransferHub(it.stationName, cleanOriginName, cleanDestName) }
+                        .take(5)
 
                     for (junctionStop in candidateJunctionStops) {
                         val leg1ArrMs = junctionStop.actualOrEstimatedTimeMs ?: junctionStop.scheduledTimeMs ?: continue
                         val junctionStationId = junctionStop.stationId
 
                         val transferDate = Date(leg1ArrMs + 3 * 60 * 1000L)
-                        val leg2DeparturesRes = fetchStationDepartures(junctionStationId, transferDate)
-                        if (leg2DeparturesRes !is ViaggiaTrenoResult.Success) continue
 
-                        val candidateLeg2Departures = leg2DeparturesRes.data.take(30)
+                        // Recupera partenze sia dalla stazione di cambio indicata, sia da Mestre/S.Lucia se in area veneziana
+                        val leg2Departures = mutableListOf<StationDeparture>()
+                        val depRes1 = fetchStationDepartures(junctionStationId, transferDate)
+                        if (depRes1 is ViaggiaTrenoResult.Success) {
+                            leg2Departures.addAll(depRes1.data)
+                        }
+                        if (junctionStationId.contains("02589") || junctionStop.stationName.contains("MESTRE", ignoreCase = true)) {
+                            val depRes2 = fetchStationDepartures("S02593", transferDate)
+                            if (depRes2 is ViaggiaTrenoResult.Success) {
+                                leg2Departures.addAll(depRes2.data)
+                            }
+                        }
+
+                        val candidateLeg2Departures = leg2Departures.take(30)
 
                         val leg2DeparturesWithStatus = candidateLeg2Departures.map { leg2Dep ->
                             async {
