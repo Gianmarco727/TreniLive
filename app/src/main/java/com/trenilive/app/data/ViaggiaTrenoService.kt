@@ -75,6 +75,9 @@ object ViaggiaTrenoService {
     // PUNTO 4: Cache in memoria per l'autocompletamento stazioni (0ms)
     private val autocompleteCache = ConcurrentHashMap<String, List<StationInfo>>()
 
+    // Cache in memoria per la risoluzione dei treni (0ms)
+    private val resolveTrainCache = ConcurrentHashMap<String, Triple<String, String, String>>()
+
     // PUNTO 3: Cache volatile in memoria per lo stato dei treni (30s TTL)
     private val trainStatusCache = ConcurrentHashMap<String, Pair<Long, TrainStatus>>()
     private const val CACHE_TTL_MS = 30_000L
@@ -190,10 +193,18 @@ object ViaggiaTrenoService {
         return false
     }
 
+    /**
+     * Risolve il numero del treno con cache in memoria.
+     * Endpoint: cercaNumeroTrenoTrenoAutocomplete/{NUMERO_TRENO}
+     */
     suspend fun resolveTrain(trainNumber: String): ViaggiaTrenoResult<Triple<String, String, String>> =
         withContext(Dispatchers.IO) {
             try {
                 val cleanNumber = trainNumber.trim()
+                resolveTrainCache[cleanNumber]?.let { cached ->
+                    return@withContext ViaggiaTrenoResult.Success(cached)
+                }
+
                 val url = URL("$BASE_URL/cercaNumeroTrenoTrenoAutocomplete/$cleanNumber")
                 val responseText = httpGet(url)
 
@@ -208,7 +219,10 @@ object ViaggiaTrenoService {
                 val stationId = match.groupValues[2]
                 val timestamp = match.groupValues[3]
 
-                ViaggiaTrenoResult.Success(Triple(num, stationId, timestamp))
+                val resultTriple = Triple(num, stationId, timestamp)
+                resolveTrainCache[cleanNumber] = resultTriple
+
+                ViaggiaTrenoResult.Success(resultTriple)
             } catch (e: Exception) {
                 ViaggiaTrenoResult.Error("Errore durante la ricerca del treno: ${e.localizedMessage}", e)
             }
@@ -331,7 +345,7 @@ object ViaggiaTrenoService {
     }
 
     /**
-     * Recupera lo stato in tempo reale del treno con cache volatile a 30 secondi (PUNTO 3).
+     * Recupera lo stato in tempo reale del treno con cache volatile a 30 secondi.
      */
     suspend fun fetchTrainStatus(
         trainNumber: String,
@@ -505,7 +519,7 @@ object ViaggiaTrenoService {
     }
 
     /**
-     * Suggerimento e autocompletamento stazioni da query testuale con cache in memoria (PUNTO 4).
+     * Suggerimento e autocompletamento stazioni da query testuale con cache in memoria.
      */
     suspend fun autocompleteStation(query: String): ViaggiaTrenoResult<List<StationInfo>> =
         withContext(Dispatchers.IO) {
@@ -627,10 +641,22 @@ object ViaggiaTrenoService {
     }
 
     /**
-     * Helper veloce per recuperare lo stato del treno usando direttamente l'ID d'origine dal tabellone partenze (PUNTO 1),
-     * eliminando la chiamata di rete ridondante a `resolveTrain`.
+     * Helper veloce per recuperare lo stato del treno usando l'ID di origine reale risolto con cache.
      */
     private suspend fun fetchTrainStatusDirectOrResolve(dep: StationDeparture, searchDate: Date): TrainStatus? {
+        val resolve = resolveTrain(dep.trainNumber)
+        if (resolve is ViaggiaTrenoResult.Success) {
+            val (num, actualOriginStationId, ts) = resolve.data
+            val statusRes = if (isSameDay(searchDate, Date())) {
+                fetchTrainStatus(num, actualOriginStationId, ts)
+            } else {
+                fetchTrainStatusForDeparture(num, actualOriginStationId, dep.departureTimestampMs)
+            }
+            if (statusRes is ViaggiaTrenoResult.Success) {
+                return statusRes.data
+            }
+        }
+
         if (dep.originStationId.isNotBlank() && dep.departureTimestampMs > 0) {
             val statusRes = if (isSameDay(searchDate, Date())) {
                 fetchTrainStatus(dep.trainNumber, dep.originStationId, dep.departureTimestampMs.toString())
@@ -640,18 +666,6 @@ object ViaggiaTrenoService {
             if (statusRes is ViaggiaTrenoResult.Success) {
                 return statusRes.data
             }
-        }
-
-        // Fallback a resolveTrain se originStationId era assente o non valido
-        val resolve = resolveTrain(dep.trainNumber)
-        if (resolve is ViaggiaTrenoResult.Success) {
-            val (num, actualOriginStationId, ts) = resolve.data
-            val statusRes = if (isSameDay(searchDate, Date())) {
-                fetchTrainStatus(num, actualOriginStationId, ts)
-            } else {
-                fetchTrainStatusForDeparture(num, actualOriginStationId, dep.departureTimestampMs)
-            }
-            return (statusRes as? ViaggiaTrenoResult.Success)?.data
         }
 
         return null
@@ -687,7 +701,7 @@ object ViaggiaTrenoService {
                 is ViaggiaTrenoResult.Error -> {}
             }
 
-            // FASE 1: RACCOLTA ESCLUSIVA SOLUZIONI DIRETTE SULLA TRATTA (PUNTO 1: no resolveTrain ridondanti)
+            // FASE 1: RACCOLTA ESCLUSIVA SOLUZIONI DIRETTE SULLA TRATTA
             while (directSolutions.size < minSolutions && attempts < 4) {
                 val departuresRes = fetchStationDepartures(originStationId, currentSearchDate)
                 if (departuresRes is ViaggiaTrenoResult.Error) {
