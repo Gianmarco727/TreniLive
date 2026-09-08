@@ -477,18 +477,49 @@ object ViaggiaTrenoService {
         }
     }
 
+    private fun adjustStopsToTargetDate(templateStops: List<TrainStop>, targetDateMs: Long): List<TrainStop> {
+        if (templateStops.isEmpty()) return templateStops
+
+        val firstStopMs = templateStops.first().scheduledTimeMs ?: targetDateMs
+
+        val targetCal = Calendar.getInstance().apply { timeInMillis = targetDateMs }
+        val firstStopCal = Calendar.getInstance().apply { timeInMillis = firstStopMs }
+
+        targetCal.set(Calendar.HOUR_OF_DAY, 0)
+        targetCal.set(Calendar.MINUTE, 0)
+        targetCal.set(Calendar.SECOND, 0)
+        targetCal.set(Calendar.MILLISECOND, 0)
+
+        firstStopCal.set(Calendar.HOUR_OF_DAY, 0)
+        firstStopCal.set(Calendar.MINUTE, 0)
+        firstStopCal.set(Calendar.SECOND, 0)
+        firstStopCal.set(Calendar.MILLISECOND, 0)
+
+        val daysDiff = ((targetCal.timeInMillis - firstStopCal.timeInMillis) / (24 * 60 * 60 * 1000L)).toInt()
+
+        return templateStops.map { stop ->
+            val origTimeMs = stop.scheduledTimeMs ?: 0L
+            val newTimeMs = if (origTimeMs > 0) {
+                Calendar.getInstance().apply {
+                    timeInMillis = origTimeMs
+                    add(Calendar.DAY_OF_YEAR, daysDiff)
+                }.timeInMillis
+            } else 0L
+
+            stop.copy(
+                isPassed = false,
+                delayMinutes = 0,
+                scheduledTimeMs = newTimeMs,
+                actualOrEstimatedTimeMs = newTimeMs
+            )
+        }
+    }
+
     suspend fun fetchTrainStatusForDeparture(
         trainNumber: String,
         departureStationId: String,
         departureTimestampMs: Long
     ): ViaggiaTrenoResult<TrainStatus> = withContext(Dispatchers.IO) {
-        if (departureTimestampMs > 0) {
-            val liveResult = fetchTrainStatus(trainNumber, departureStationId, departureTimestampMs.toString())
-            if (liveResult is ViaggiaTrenoResult.Success) {
-                return@withContext liveResult
-            }
-        }
-
         val resolveRes = resolveTrain(trainNumber)
         if (resolveRes is ViaggiaTrenoResult.Success) {
             val (num, depId, ts) = resolveRes.data
@@ -497,12 +528,7 @@ object ViaggiaTrenoService {
                 val template = statusRes.data
                 val formattedDate = SimpleDateFormat("dd/MM/yyyy", Locale.ITALY).format(Date(departureTimestampMs))
 
-                val futureStops = template.stops.map { stop ->
-                    stop.copy(
-                        isPassed = false,
-                        delayMinutes = 0
-                    )
-                }
+                val futureStops = adjustStopsToTargetDate(template.stops, departureTimestampMs)
 
                 val futureStatus = template.copy(
                     departureStationId = departureStationId,
