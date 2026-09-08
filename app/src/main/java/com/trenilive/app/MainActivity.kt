@@ -879,7 +879,7 @@ fun TrainTrackerScreen(
             }
         }
 
-        // LISTA SOLUZIONI TROVATE (CON BARRA DI PROGRESSO E DETTAGLI MATERIAL 3 COMPLETI SULLE SCHEDE DIRETTE ESPANSE)
+        // LISTA SOLUZIONI TROVATE (CON LAYOUT TRATTA SELEZIONATA ANTISOVRAAPPOSIZIONE BINARI E SENTENCE CASE)
         if (routeSolutions.isNotEmpty() && !isLoading) {
             Spacer(modifier = Modifier.height(20.dp))
             Text(
@@ -1115,7 +1115,7 @@ fun TrainTrackerScreen(
 
                                         Spacer(modifier = Modifier.height(12.dp))
 
-                                        // 5. TRATTA SELEZIONATA (SALITA E DISCESA CON ENTRAMBI I BINARI)
+                                        // 5. TRATTA SELEZIONATA (SALITA E DISCESA CON ENTRAMBI I BINARI - NO WRAP)
                                         val stopsCount = legStatus.stops.size
                                         if (stopsCount > 1) {
                                             val boardingIdx = legStatus.stops.indexOfFirst {
@@ -1157,7 +1157,10 @@ fun TrainTrackerScreen(
                                                             text = "Salita: ${boardingStop?.stationName ?: singleLeg.originStationName} (${singleLeg.departureTimeFormatted})",
                                                             fontSize = 12.sp,
                                                             fontWeight = FontWeight.SemiBold,
-                                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                            modifier = Modifier.weight(1f).padding(end = 8.dp)
                                                         )
                                                         boardingPlatform?.let { p ->
                                                             Text(
@@ -1178,7 +1181,10 @@ fun TrainTrackerScreen(
                                                             text = "Discesa: ${alightingStop?.stationName ?: singleLeg.destinationStationName} (${singleLeg.arrivalTimeFormatted})",
                                                             fontSize = 12.sp,
                                                             fontWeight = FontWeight.SemiBold,
-                                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                            modifier = Modifier.weight(1f).padding(end = 8.dp)
                                                         )
                                                         alightingPlatform?.let { p ->
                                                             Text(
@@ -2736,13 +2742,17 @@ fun TrainStatusCard(
                             )
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
                                     text = "Salita: ${boardingStop?.stationName ?: userBoardingStation}",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f).padding(end = 8.dp)
                                 )
                                 boardingPlatform?.let { p ->
                                     Text(
@@ -2763,7 +2773,10 @@ fun TrainStatusCard(
                                     text = "Discesa: ${alightingStop?.stationName ?: userAlightingStation}",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f).padding(end = 8.dp)
                                 )
                                 alightingPlatform?.let { p ->
                                     Text(
