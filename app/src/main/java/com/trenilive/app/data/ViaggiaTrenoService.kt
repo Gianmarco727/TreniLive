@@ -534,6 +534,8 @@ object ViaggiaTrenoService {
                     departureStationId = departureStationId,
                     timestamp = departureTimestampMs.toString(),
                     delayMinutes = 0,
+                    isCancelled = false, // Una corsa futura programmata per domani NON è soppressa solo perché la corsa di oggi è stata soppressa
+                    cancellationReason = null,
                     lastDetectedStation = "Programmato per il $formattedDate",
                     stops = futureStops,
                     progressPercentage = 0,
@@ -720,6 +722,8 @@ object ViaggiaTrenoService {
                 is ViaggiaTrenoResult.Error -> {}
             }
 
+            val isSearchToday = isSameDay(date, Date())
+
             // FASE 1: RACCOLTA ESCLUSIVA SOLUZIONI DIRETTE SULLA TRATTA
             while (directSolutions.size < minSolutions && attempts < 4) {
                 val departuresRes = fetchStationDepartures(originStationId, currentSearchDate)
@@ -753,7 +757,8 @@ object ViaggiaTrenoService {
 
                     val boardingStop = stops[originIdx]
 
-                    if (status.isCancelled || status.progressPercentage >= 100) continue
+                    // Filtra treni soppressi o gia arrivati a destinazione SOLO se la ricerca riguarda la giornata di OGGI
+                    if (isSearchToday && (status.isCancelled || status.progressPercentage >= 100)) continue
                     val boardMs = boardingStop.scheduledTimeMs ?: 0L
                     if (boardMs < date.time - 5 * 60 * 1000L) continue
 
@@ -858,7 +863,7 @@ object ViaggiaTrenoService {
 
                     val boardingStop = stops[originIdx]
 
-                    if (status.isCancelled || status.progressPercentage >= 100) continue
+                    if (isSearchToday && (status.isCancelled || status.progressPercentage >= 100)) continue
                     val boardMs = boardingStop.scheduledTimeMs ?: 0L
                     if (boardMs < date.time - 5 * 60 * 1000L) continue
 
