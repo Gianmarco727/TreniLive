@@ -94,6 +94,21 @@ object ViaggiaTrenoService {
     }
 
     /**
+     * Assegna priorità alle stazioni di cambio principali (es. Venezia Mestre, Bologna, Milano)
+     * rispetto alle stazioni di cambio secondarie.
+     */
+    private fun getJunctionHubPriority(stationName: String): Int {
+        val norm = normalizeStationName(stationName)
+        return when {
+            norm.contains("MESTRE") || norm.contains("S.LUCIA") || norm.contains("BOLOGNA") ||
+                    norm.contains("MILANO") || norm.contains("ROMA") || norm.contains("FIRENZE") -> 1
+            norm.contains("PADOVA") || norm.contains("VERONA") || norm.contains("TREVISO") ||
+                    norm.contains("VICENZA") || norm.contains("FERRARA") || norm.contains("ROVIGO") -> 2
+            else -> 3
+        }
+    }
+
+    /**
      * Verifica se una stazione di cambio è geograficamente coerente rispetto alla destinazione finale,
      * evitando deviazioni illogiche (es. andare a Trieste per raggiungere Bologna).
      */
@@ -639,7 +654,7 @@ object ViaggiaTrenoService {
                     continue
                 }
 
-                val departuresWithStatus = rawDepartures.take(20).map { dep ->
+                val departuresWithStatus = rawDepartures.take(25).map { dep ->
                     async {
                         val statusRes = if (isSameDay(currentSearchDate, Date())) {
                             resolveTrain(dep.trainNumber).let { resolve ->
@@ -739,7 +754,7 @@ object ViaggiaTrenoService {
             currentSearchDate = date
             attempts = 0
 
-            while (transferSolutions.size < minSolutions && attempts < 4) {
+            while (attempts < 4) {
                 val departuresRes = fetchStationDepartures(originStationId, currentSearchDate)
                 if (departuresRes is ViaggiaTrenoResult.Error) {
                     if (transferSolutions.isNotEmpty()) break
@@ -785,9 +800,10 @@ object ViaggiaTrenoService {
                         if (status.isCancelled || status.progressPercentage >= 100 || boardingStop.isPassed) continue
                     }
 
-                    // Seleziona solo le fermate di snodo principali e geograficamente coerenti per la destinazione
+                    // Ordina le stazioni di snodo dando priorità ai grandi hub (Venezia Mestre, Bologna, Milano)
                     val candidateJunctionStops = stops.drop(originIdx + 1)
                         .filter { isMajorJunctionStation(it.stationName) && isValidTransferHub(it.stationName, cleanOriginName, cleanDestName) }
+                        .sortedBy { getJunctionHubPriority(it.stationName) }
                         .take(5)
 
                     for (junctionStop in candidateJunctionStops) {
@@ -796,7 +812,7 @@ object ViaggiaTrenoService {
 
                         val transferDate = Date(leg1ArrMs + 3 * 60 * 1000L)
 
-                        // Recupera partenze sia dalla stazione di cambio indicata, sia da Mestre/S.Lucia se in area veneziana
+                        // Recupera partenze sia dalla stazione di cambio indicata, sia da Mestre/S.Lucia se nell'area di Venezia
                         val leg2Departures = mutableListOf<StationDeparture>()
                         val depRes1 = fetchStationDepartures(junctionStationId, transferDate)
                         if (depRes1 is ViaggiaTrenoResult.Success) {
