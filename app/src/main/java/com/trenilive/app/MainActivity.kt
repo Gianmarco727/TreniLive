@@ -23,6 +23,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -879,7 +880,6 @@ fun TrainTrackerScreen(
             }
         }
 
-        // LISTA SOLUZIONI TROVATE (CON LAYOUT TRATTA SELEZIONATA ANTISOVRAAPPOSIZIONE BINARI E SENTENCE CASE)
         if (routeSolutions.isNotEmpty() && !isLoading) {
             Spacer(modifier = Modifier.height(20.dp))
             Text(
@@ -932,7 +932,6 @@ fun TrainTrackerScreen(
                                         color = MaterialTheme.colorScheme.primary
                                     )
 
-                                    // Badge Cambi / Diretto
                                     Surface(
                                         color = if (isDirect) Color(0xFF2E7D32).copy(alpha = 0.15f) else Color(0xFFE65100).copy(alpha = 0.15f),
                                         shape = RoundedCornerShape(12.dp)
@@ -1083,7 +1082,7 @@ fun TrainTrackerScreen(
                                             Spacer(modifier = Modifier.height(10.dp))
                                         }
 
-                                        // 4. BARRA DI PROGRESSO MATERIAL 3 AVANZAMENTO TRENO (PILL SHAPE 100% M3)
+                                        // 4. BARRA DI PROGRESSO MATERIAL 3 AVANZAMENTO TRENO (SENZA PUNTINO ROSSO A 0%)
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween
@@ -1101,21 +1100,32 @@ fun TrainTrackerScreen(
                                             )
                                         }
 
-                                        LinearProgressIndicator(
-                                            progress = { legStatus.progressPercentage / 100f },
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(top = 6.dp)
-                                                .height(10.dp)
-                                                .clip(CircleShape),
-                                            color = Color(0xFFC8102E),
-                                            trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                                            strokeCap = StrokeCap.Round
-                                        )
+                                        if (legStatus.progressPercentage > 0) {
+                                            LinearProgressIndicator(
+                                                progress = { legStatus.progressPercentage / 100f },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(top = 6.dp)
+                                                    .height(8.dp)
+                                                    .clip(CircleShape),
+                                                color = Color(0xFFC8102E),
+                                                trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                                strokeCap = StrokeCap.Round
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(top = 6.dp)
+                                                    .height(8.dp)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                            )
+                                        }
 
                                         Spacer(modifier = Modifier.height(12.dp))
 
-                                        // 5. TRATTA SELEZIONATA (SALITA E DISCESA CON ENTRAMBI I BINARI - NO WRAP)
+                                        // 5. TRATTA SELEZIONATA (CON ORARIO GARANTITO E NON TRONCATO)
                                         val stopsCount = legStatus.stops.size
                                         if (stopsCount > 1) {
                                             val boardingIdx = legStatus.stops.indexOfFirst {
@@ -1148,20 +1158,41 @@ fun TrainTrackerScreen(
                                                         fontWeight = FontWeight.Bold,
                                                         color = MaterialTheme.colorScheme.secondary
                                                     )
+
+                                                    // SALITA
                                                     Row(
                                                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                                                         horizontalArrangement = Arrangement.SpaceBetween,
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        Text(
-                                                            text = "Salita: ${boardingStop?.stationName ?: singleLeg.originStationName} (${singleLeg.departureTimeFormatted})",
-                                                            fontSize = 12.sp,
-                                                            fontWeight = FontWeight.SemiBold,
-                                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis,
-                                                            modifier = Modifier.weight(1f).padding(end = 8.dp)
-                                                        )
+                                                        Row(
+                                                            modifier = Modifier.weight(1f).padding(end = 8.dp),
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Text(
+                                                                text = "Salita: ",
+                                                                fontSize = 12.sp,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                            )
+                                                            Text(
+                                                                text = boardingStop?.stationName ?: singleLeg.originStationName,
+                                                                fontSize = 12.sp,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis,
+                                                                modifier = Modifier.weight(1f, fill = false)
+                                                            )
+                                                            Text(
+                                                                text = " (${singleLeg.departureTimeFormatted})",
+                                                                fontSize = 12.sp,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                                maxLines = 1
+                                                            )
+                                                        }
+
                                                         boardingPlatform?.let { p ->
                                                             Text(
                                                                 text = "Binario $p",
@@ -1172,20 +1203,40 @@ fun TrainTrackerScreen(
                                                         }
                                                     }
 
+                                                    // DISCESA
                                                     Row(
                                                         modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                                                         horizontalArrangement = Arrangement.SpaceBetween,
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        Text(
-                                                            text = "Discesa: ${alightingStop?.stationName ?: singleLeg.destinationStationName} (${singleLeg.arrivalTimeFormatted})",
-                                                            fontSize = 12.sp,
-                                                            fontWeight = FontWeight.SemiBold,
-                                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis,
-                                                            modifier = Modifier.weight(1f).padding(end = 8.dp)
-                                                        )
+                                                        Row(
+                                                            modifier = Modifier.weight(1f).padding(end = 8.dp),
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Text(
+                                                                text = "Discesa: ",
+                                                                fontSize = 12.sp,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                            )
+                                                            Text(
+                                                                text = alightingStop?.stationName ?: singleLeg.destinationStationName,
+                                                                fontSize = 12.sp,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis,
+                                                                modifier = Modifier.weight(1f, fill = false)
+                                                            )
+                                                            Text(
+                                                                text = " (${singleLeg.arrivalTimeFormatted})",
+                                                                fontSize = 12.sp,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                                maxLines = 1
+                                                            )
+                                                        }
+
                                                         alightingPlatform?.let { p ->
                                                             Text(
                                                                 text = "Binario $p",
@@ -2691,17 +2742,28 @@ fun TrainStatusCard(
                 )
             }
 
-            LinearProgressIndicator(
-                progress = { status.progressPercentage / 100f },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp)
-                    .height(10.dp)
-                    .clip(CircleShape),
-                color = Color(0xFFC8102E),
-                trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                strokeCap = StrokeCap.Round
-            )
+            if (status.progressPercentage > 0) {
+                LinearProgressIndicator(
+                    progress = { status.progressPercentage / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp)
+                        .height(10.dp)
+                        .clip(CircleShape),
+                    color = Color(0xFFC8102E),
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    strokeCap = StrokeCap.Round
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp)
+                        .height(10.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                )
+            }
 
             if (userBoardingStation.isNotBlank() || userAlightingStation.isNotBlank()) {
                 val stopsCount = status.stops.size
@@ -2740,20 +2802,43 @@ fun TrainStatusCard(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.secondary
                             )
+
+                            // SALITA (CON ORARIO INTACT)
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "Salita: ${boardingStop?.stationName ?: userBoardingStation}",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f).padding(end = 8.dp)
-                                )
+                                Row(
+                                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Salita: ",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                    Text(
+                                        text = boardingStop?.stationName ?: userBoardingStation,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    boardingStop?.scheduledTimeMs?.let { ms ->
+                                        Text(
+                                            text = " (${formatTime(ms)})",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+
                                 boardingPlatform?.let { p ->
                                     Text(
                                         text = "Binario $p",
@@ -2764,20 +2849,42 @@ fun TrainStatusCard(
                                 }
                             }
 
+                            // DISCESA (CON ORARIO INTACT)
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "Discesa: ${alightingStop?.stationName ?: userAlightingStation}",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f).padding(end = 8.dp)
-                                )
+                                Row(
+                                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Discesa: ",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                    Text(
+                                        text = alightingStop?.stationName ?: userAlightingStation,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    alightingStop?.scheduledTimeMs?.let { ms ->
+                                        Text(
+                                            text = " (${formatTime(ms)})",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+
                                 alightingPlatform?.let { p ->
                                     Text(
                                         text = "Binario $p",
