@@ -91,7 +91,8 @@ object ViaggiaTrenoService {
 
         if (cleanStopId.isNotBlank() && cleanQueryId.isNotBlank()) {
             if (cleanStopId == cleanQueryId) return true
-            if (cleanStopId.length >= 3 && cleanQueryId.length >= 3 && cleanStopId.take(3) == cleanQueryId.take(3)) {
+            if ((cleanStopId == "05043" && cleanQueryId == "05046") || (cleanStopId == "05046" && cleanQueryId == "05043") ||
+                (cleanStopId == "5043" && cleanQueryId == "5046") || (cleanStopId == "5046" && cleanQueryId == "5043")) {
                 return true
             }
         }
@@ -100,12 +101,16 @@ object ViaggiaTrenoService {
         val normQuery = normalizeStationName(queryName)
 
         if (normStop == normQuery) return true
-        if (normStop.contains(normQuery) || normQuery.contains(normStop)) return true
 
-        val mainWordQuery = normQuery.split(" ").firstOrNull { it.length > 2 } ?: normQuery
-        val mainWordStop = normStop.split(" ").firstOrNull { it.length > 2 } ?: normStop
+        val queryWords = normQuery.split(" ").filter { it.length > 2 }
+        val stopWords = normStop.split(" ").filter { it.length > 2 }
 
-        return mainWordStop == mainWordQuery
+        if (queryWords.isNotEmpty() && stopWords.isNotEmpty()) {
+            // La prima parola identificativa della città DEVE coincidere (es. "TREVISO" == "TREVISO", ma "MOGLIANO" != "TREVISO")
+            return queryWords.first() == stopWords.first()
+        }
+
+        return normStop.contains(normQuery) || normQuery.contains(normStop)
     }
 
     /**
