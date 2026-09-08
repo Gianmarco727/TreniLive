@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 class LiveTrainManager(context: Context) {
@@ -16,6 +19,34 @@ class LiveTrainManager(context: Context) {
 
     fun setMediaSessionBypassEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_MEDIA_SESSION_BYPASS, enabled).commit()
+    }
+
+    fun isSamsungHintDismissed(): Boolean {
+        return prefs.getBoolean(KEY_SAMSUNG_HINT_DISMISSED, false)
+    }
+
+    fun setSamsungHintDismissed(dismissed: Boolean) {
+        prefs.edit().putBoolean(KEY_SAMSUNG_HINT_DISMISSED, dismissed).commit()
+    }
+
+    fun setStoppedForToday(trainNumber: String, isStopped: Boolean) {
+        val clean = trainNumber.trim()
+        if (clean.isBlank()) return
+        val todayDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.ITALY).format(Date())
+        val key = "stopped_date_$clean"
+        if (isStopped) {
+            prefs.edit().putString(key, todayDateStr).commit()
+        } else {
+            prefs.edit().remove(key).commit()
+        }
+    }
+
+    fun isStoppedForToday(trainNumber: String): Boolean {
+        val clean = trainNumber.trim()
+        if (clean.isBlank()) return false
+        val todayDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.ITALY).format(Date())
+        val savedDate = prefs.getString("stopped_date_$clean", null)
+        return savedDate == todayDateStr
     }
 
     fun getLiveTrains(): List<LiveTrainConfig> {
@@ -41,6 +72,21 @@ class LiveTrainManager(context: Context) {
                     }
                 }
 
+                val monitoredList = mutableListOf<MonitoredStop>()
+                val stopsArray = obj.optJSONArray("monitoredStops")
+                if (stopsArray != null) {
+                    for (k in 0 until stopsArray.length()) {
+                        val sObj = stopsArray.getJSONObject(k)
+                        monitoredList.add(
+                            MonitoredStop(
+                                stationId = sObj.optString("stationId", ""),
+                                stationName = sObj.optString("stationName", ""),
+                                progressPercentage = sObj.optInt("progressPercentage", 0)
+                            )
+                        )
+                    }
+                }
+
                 if (num.isNotBlank()) {
                     list.add(
                         LiveTrainConfig(
@@ -51,7 +97,8 @@ class LiveTrainManager(context: Context) {
                             originStationName = originName,
                             destinationStationName = destName,
                             scheduledDepartureTime = time,
-                            isEnabled = isEnabled
+                            isEnabled = isEnabled,
+                            monitoredStops = monitoredList
                         )
                     )
                 }
@@ -71,13 +118,23 @@ class LiveTrainManager(context: Context) {
             currentList.add(config)
         }
         persistList(currentList)
+        // Se salviamo un treno abilitato, azzeriamo l'eventuale flag di stop per oggi
+        if (config.isEnabled) {
+            setStoppedForToday(config.trainNumber, false)
+        }
         return currentList
     }
 
     fun toggleTrainEnabled(id: String): List<LiveTrainConfig> {
         val currentList = getLiveTrains().map {
             if (it.id == id || it.trainNumber == id) {
-                it.copy(isEnabled = !it.isEnabled)
+                val newEnabled = !it.isEnabled
+                if (!newEnabled) {
+                    setStoppedForToday(it.trainNumber, true)
+                } else {
+                    setStoppedForToday(it.trainNumber, false)
+                }
+                it.copy(isEnabled = newEnabled)
             } else it
         }
         persistList(currentList)
@@ -85,6 +142,10 @@ class LiveTrainManager(context: Context) {
     }
 
     fun removeLiveTrain(id: String): List<LiveTrainConfig> {
+        val target = getLiveTrains().firstOrNull { it.id == id || it.trainNumber == id }
+        if (target != null) {
+            setStoppedForToday(target.trainNumber, true)
+        }
         val currentList = getLiveTrains().filterNot { it.id == id || it.trainNumber == id }
         persistList(currentList)
         return currentList
@@ -105,6 +166,17 @@ class LiveTrainManager(context: Context) {
                 val daysArray = JSONArray()
                 item.daysOfWeek.forEach { daysArray.put(it) }
                 put("daysOfWeek", daysArray)
+
+                val stopsArray = JSONArray()
+                item.monitoredStops.forEach { stop ->
+                    val sObj = JSONObject().apply {
+                        put("stationId", stop.stationId)
+                        put("stationName", stop.stationName)
+                        put("progressPercentage", stop.progressPercentage)
+                    }
+                    stopsArray.put(sObj)
+                }
+                put("monitoredStops", stopsArray)
             }
             jsonArray.put(obj)
         }
@@ -115,5 +187,6 @@ class LiveTrainManager(context: Context) {
         private const val PREFS_NAME = "live_train_tracker_prefs"
         private const val KEY_LIVE_TRAINS = "saved_live_trains"
         private const val KEY_MEDIA_SESSION_BYPASS = "key_media_session_bypass"
+        private const val KEY_SAMSUNG_HINT_DISMISSED = "key_samsung_hint_dismissed"
     }
 }
