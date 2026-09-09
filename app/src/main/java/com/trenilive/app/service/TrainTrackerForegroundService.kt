@@ -1,10 +1,13 @@
 package com.trenilive.app.service
 
 import android.annotation.SuppressLint
-import android.app.*
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.media.MediaMetadata
 import android.media.session.MediaSession
@@ -12,8 +15,7 @@ import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
+import android.util.Log
 import com.trenilive.app.MainActivity
 import com.trenilive.app.R
 import com.trenilive.app.data.LiveTrainManager
@@ -26,109 +28,128 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
-data class TrackedTrainJobInfo(
-    val trainNumber: String,
-    var stationId: String?,
-    var timestamp: String?,
-    val job: Job
-)
-
 class TrainTrackerForegroundService : Service() {
 
-    private val serviceJob = SupervisorJob()
-    private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
-
-    private val trackedTrains = ConcurrentHashMap<String, TrackedTrainJobInfo>()
-
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val trackingJobs = ConcurrentHashMap<String, Job>()
     private var nativeMediaSession: MediaSession? = null
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    companion object {
+        const val CHANNEL_ID = "live_train_tracker_channel"
+        const val ACTION_START_TRACKING = "com.trenilive.app.ACTION_START_TRACKING"
+        const val ACTION_STOP_TRACKING = "com.trenilive.app.ACTION_STOP_TRACKING"
+        const val ACTION_REFRESH_NOTIF = "com.trenilive.app.ACTION_REFRESH_NOTIF"
+
+        const val EXTRA_TRAIN_NUMBER = "extra_train_number"
+        const val EXTRA_STATION_ID = "extra_station_id"
+
+        private fun getNotificationIdForTrain(trainNumber: String): Int {
+            val clean = trainNumber.replace("[^0-9]".toRegex(), "")
+            val parsed = clean.toIntOrNull()
+            return if (parsed != null && parsed in 1..99999) {
+                1000 + (parsed % 10000)
+            } else {
+                1000 + (abs(trainNumber.trim().hashCode()) % 10000)
+            }
+        }
+
+        fun startService(context: Context, trainNumber: String, stationId: String? = null) {
+            val intent = Intent(context, TrainTrackerForegroundService::class.java).apply {
+                action = ACTION_START_TRACKING
+                putExtra(EXTRA_TRAIN_NUMBER, trainNumber)
+                stationId?.let { putExtra(EXTRA_STATION_ID, it) }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
+
+        fun stopService(context: Context, trainNumber: String) {
+            val intent = Intent(context, TrainTrackerForegroundService::class.java).apply {
+                action = ACTION_STOP_TRACKING
+                putExtra(EXTRA_TRAIN_NUMBER, trainNumber)
+            }
+            context.startService(intent)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        ensureMediaSessionState(0)
-    }
 
-    private fun getNotificationIdForTrain(trainNum: String?): Int {
-        if (trainNum.isNullOrBlank()) return NOTIFICATION_ID_DEFAULT
-        val parsed = trainNum.trim().toIntOrNull()
-        return if (parsed != null && parsed in 1..99999) {
-            1000 + (parsed % 10000)
-        } else {
-            1000 + (abs(trainNum.trim().hashCode()) % 10000)
+        val liveManager = LiveTrainManager(this)
+        if (liveManager.isMediaSessionBypassEnabled() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            setupMediaSessionBypass()
         }
     }
 
-    private fun ensureMediaSessionState(progressPercentage: Int = 0) {
-        val liveManager = LiveTrainManager(this)
-        val shouldEnableBypass = liveManager.isMediaSessionBypassEnabled()
-
-        if (shouldEnableBypass) {
-            val currentPosMs = (progressPercentage.coerceIn(0, 100)) * 1000L
-            val state = PlaybackState.Builder()
-                .setState(PlaybackState.STATE_PLAYING, currentPosMs, 0.0f)
-                .setActions(0L)
-                .build()
-
-            if (nativeMediaSession == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                try {
-                    nativeMediaSession = MediaSession(this, "TreniLiveMediaSession").apply {
-                        isActive = true
+    private fun setupMediaSessionBypass() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                if (nativeMediaSession == null) {
+                    nativeMediaSession = MediaSession(this, "TreniLiveMediaBypass").apply {
+                        setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
+                        val state = PlaybackState.Builder()
+                            .setActions(PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_SKIP_TO_NEXT)
+                            .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
+                            .build()
                         setPlaybackState(state)
+                        isActive = true
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
                 }
-            } else {
-                nativeMediaSession?.isActive = true
-                nativeMediaSession?.setPlaybackState(state)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
-        } else {
-            if (nativeMediaSession != null) {
-                try {
-                    nativeMediaSession?.isActive = false
-                    nativeMediaSession?.release()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+        }
+    }
+
+    private fun releaseMediaSessionBypass() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                nativeMediaSession?.isActive = false
+                nativeMediaSession?.release()
                 nativeMediaSession = null
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val action = intent?.action ?: ACTION_START_TRACKING
+        val action = intent?.action
+        val trainNumber = intent?.getStringExtra(EXTRA_TRAIN_NUMBER)?.trim() ?: ""
+        val stationId = intent?.getStringExtra(EXTRA_STATION_ID)?.trim()
+
+        val liveManager = LiveTrainManager(this)
+        if (liveManager.isMediaSessionBypassEnabled()) {
+            setupMediaSessionBypass()
+        } else {
+            releaseMediaSessionBypass()
+        }
 
         when (action) {
+            ACTION_START_TRACKING -> {
+                if (trainNumber.isNotBlank()) {
+                    liveManager.setStoppedForToday(trainNumber, false)
+                    startTrackingTrain(trainNumber, stationId)
+                }
+            }
             ACTION_STOP_TRACKING -> {
-                val targetTrain = intent?.getStringExtra(EXTRA_TRAIN_NUMBER)
-                if (!targetTrain.isNullOrBlank()) {
-                    stopTrackingForTrain(targetTrain)
-                } else {
-                    stopAllTracking()
+                if (trainNumber.isNotBlank()) {
+                    liveManager.setStoppedForToday(trainNumber, true)
+                    stopTrackingForTrain(trainNumber)
                 }
             }
             ACTION_REFRESH_NOTIF -> {
-                ensureMediaSessionState(0)
-                trackedTrains.keys.forEach { trainNum ->
-                    serviceScope.launch {
-                        val info = trackedTrains[trainNum]
-                        if (info != null) {
-                            updateStatusForTrain(info)
+                trackingJobs.keys.forEach { num ->
+                    val job = trackingJobs[num]
+                    if (job != null && job.isActive) {
+                        serviceScope.launch {
+                            updateNotificationForTrain(num, null, null)
                         }
                     }
-                }
-            }
-            ACTION_START_TRACKING -> {
-                val trainNumber = intent?.getStringExtra(EXTRA_TRAIN_NUMBER)
-                val stationId = intent?.getStringExtra(EXTRA_STATION_ID)
-                val timestamp = intent?.getStringExtra(EXTRA_TIMESTAMP)
-
-                if (!trainNumber.isNullOrBlank()) {
-                    startTrackingTrain(trainNumber, stationId, timestamp)
-                } else if (trackedTrains.isEmpty()) {
-                    stopSelf()
                 }
             }
         }
@@ -136,71 +157,89 @@ class TrainTrackerForegroundService : Service() {
         return START_STICKY
     }
 
-    private fun startTrackingTrain(trainNumber: String, stationId: String?, timestamp: String?) {
-        // Quando il tracciamento si avvia esplicitamente, azzeriamo l'eventuale flag di stop manuale per oggi
-        LiveTrainManager(this).setStoppedForToday(trainNumber, false)
+    override fun onBind(intent: Intent?): IBinder? = null
 
-        // Se il treno era già tracciato, ferma il vecchio job
-        trackedTrains[trainNumber]?.job?.cancel()
+    override fun onDestroy() {
+        super.onDestroy()
+        releaseMediaSessionBypass()
+        serviceScope.cancel()
+    }
 
-        ensureMediaSessionState(0)
+    private fun startTrackingTrain(trainNumber: String, providedStationId: String?) {
+        trackingJobs[trainNumber]?.cancel()
 
-        val initialNotification = buildNotification(
+        val notifId = getNotificationIdForTrain(trainNumber)
+        val initialNotif = buildNotification(
             trainNumber = trainNumber,
-            title = "Tracciamento Treno $trainNumber",
-            shortContent = "Ricerca dati in tempo reale in corso...",
-            expandedContent = "Ricerca dati in tempo reale in corso...",
+            title = "Inizio tracciamento Treno $trainNumber",
+            shortContent = "Connessione ai servizi ViaggiaTreno in corso...",
+            expandedContent = "Recupero posizione e ritardo in tempo reale per Treno $trainNumber...",
             progress = 0,
-            chipText = "OK",
+            chipText = "LIV",
             isInitial = true
         )
 
-        val notifId = getNotificationIdForTrain(trainNumber)
-
-        if (trackedTrains.isEmpty()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                } else {
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-                }
-                startForeground(
-                    notifId,
-                    initialNotification,
-                    serviceType
-                )
-            } else {
-                startForeground(notifId, initialNotification)
-            }
-        } else {
-            notifySafely(trainNumber, initialNotification)
-        }
+        startForeground(notifId, initialNotif)
 
         val job = serviceScope.launch {
-            val info = TrackedTrainJobInfo(trainNumber, stationId, timestamp, coroutineContext[Job]!!)
-            trackedTrains[trainNumber] = info
+            var currentStationId = providedStationId
+
             while (isActive) {
-                updateStatusForTrain(info)
-                delay(60_000) // Polling ogni 60 secondi
+                try {
+                    updateNotificationForTrain(trainNumber, currentStationId) { newStationId ->
+                        currentStationId = newStationId
+                    }
+                } catch (e: Exception) {
+                    Log.e("TrainTrackerService", "Errore tracciamento $trainNumber: ${e.message}")
+                }
+                delay(15_000) // Polling ogni 15s
             }
+        }
+
+        trackingJobs[trainNumber] = job
+    }
+
+    private fun stopTrackingForTrain(trainNumber: String) {
+        trackingJobs[trainNumber]?.cancel()
+        trackingJobs.remove(trainNumber)
+
+        val notifId = getNotificationIdForTrain(trainNumber)
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.cancel(notifId)
+
+        if (trackingJobs.isEmpty()) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
         }
     }
 
-    private suspend fun updateStatusForTrain(info: TrackedTrainJobInfo) {
-        val trainNumber = info.trainNumber
+    private suspend fun updateNotificationForTrain(
+        trainNumber: String,
+        currentStationId: String?,
+        onStationIdResolved: ((String) -> Unit)? = null
+    ) {
+        var stationId = currentStationId
+        var timestamp: String? = null
 
-        ensureMediaSessionState()
-
-        var stationId = info.stationId
-        var timestamp = info.timestamp
-
-        if (stationId.isNullOrBlank() || timestamp.isNullOrBlank()) {
+        if (stationId.isNullOrBlank()) {
             when (val resolveRes = ViaggiaTrenoService.resolveTrain(trainNumber)) {
                 is ViaggiaTrenoResult.Success -> {
                     stationId = resolveRes.data.second
                     timestamp = resolveRes.data.third
-                    info.stationId = stationId
-                    info.timestamp = timestamp
+                    onStationIdResolved?.invoke(stationId)
+                }
+                is ViaggiaTrenoResult.Error -> {
+                    updateNotificationError(trainNumber, resolveRes.message)
+                    return
+                }
+            }
+        }
+
+        if (timestamp.isNullOrBlank() && !stationId.isNullOrBlank()) {
+            when (val resolveRes = ViaggiaTrenoService.resolveTrain(trainNumber)) {
+                is ViaggiaTrenoResult.Success -> {
+                    stationId = resolveRes.data.second
+                    timestamp = resolveRes.data.third
                 }
                 is ViaggiaTrenoResult.Error -> {
                     updateNotificationError(trainNumber, resolveRes.message)
@@ -376,7 +415,6 @@ class TrainTrackerForegroundService : Service() {
                     ).build()
                 )
 
-            // Se l'opzione MediaSession Bypass è stata attivata dalle Opzioni Sviluppatore:
             if (nativeMediaSession != null) {
                 nativeMediaSession?.sessionToken?.let { token ->
                     val mediaStyle = Notification.MediaStyle().setMediaSession(token)
@@ -388,11 +426,9 @@ class TrainTrackerForegroundService : Service() {
                         val progressStyleClass = Class.forName("android.app.Notification\$ProgressStyle")
                         val progressStyle = progressStyleClass.getDeclaredConstructor().newInstance()
 
-                        // 1. Imposta la percentuale di avanzamento della progress bar
                         val setProgressMethod = progressStyleClass.getMethod("setProgress", Int::class.javaPrimitiveType)
                         setProgressMethod.invoke(progressStyle, progress)
 
-                        // 2. Imposta l'icona del treno 3 monocromatica bianca specchiata (ic_progress_train3)
                         try {
                             val trainIcon = Icon.createWithResource(this, R.drawable.ic_progress_train3)
                             val setTrackerIconMethod = progressStyleClass.methods.firstOrNull {
@@ -403,10 +439,14 @@ class TrainTrackerForegroundService : Service() {
                             e.printStackTrace()
                         }
 
-                        // 3. Imposta fino a 4 punti milestone (quadratini) per le fermate monitorate
+                        // RECUPERA LE FERMATE MONITORATE SPECIFICHE PER QUESTO TRENO/TRATTA COMPONENTE
                         val liveManager = LiveTrainManager(this)
-                        val activeConfig = liveManager.getLiveTrains().firstOrNull { it.trainNumber == trainNumber }
-                        val monitoredStops = activeConfig?.monitoredStops ?: emptyList()
+                        val activeConfig = liveManager.getLiveTrains().firstOrNull {
+                            it.trainNumber == trainNumber || it.getEffectiveLegs().any { leg -> leg.trainNumber == trainNumber }
+                        }
+                        val currentLeg = activeConfig?.getEffectiveLegs()?.firstOrNull { it.trainNumber == trainNumber }
+                        val monitoredStops = currentLeg?.monitoredStops?.ifEmpty { activeConfig.getEffectiveMonitoredStops() }
+                            ?: activeConfig?.getEffectiveMonitoredStops() ?: emptyList()
 
                         if (monitoredStops.isNotEmpty()) {
                             try {
@@ -418,200 +458,100 @@ class TrainTrackerForegroundService : Service() {
                                     val pointObj = try {
                                         val pointConstructor = pointClass.getDeclaredConstructor(Int::class.javaPrimitiveType)
                                         pointConstructor.newInstance(pct)
-                                    } catch (e: Throwable) {
-                                        val pointConstructor = pointClass.getDeclaredConstructor()
-                                        val pt = pointConstructor.newInstance()
-                                        val setPosMethod = pointClass.methods.firstOrNull { it.name == "setPosition" || it.name == "setProgress" }
-                                        setPosMethod?.invoke(pt, pct)
-                                        pt
+                                    } catch (e: Exception) {
+                                        val pointConstructor = pointClass.declaredConstructors.firstOrNull()
+                                        pointConstructor?.newInstance()
                                     }
-                                    pointsList.add(pointObj)
+
+                                    if (pointObj != null) {
+                                        try {
+                                            val setPointProgress = pointClass.methods.firstOrNull { it.name == "setProgress" || it.name == "setPosition" }
+                                            setPointProgress?.invoke(pointObj, pct)
+                                        } catch (e: Throwable) {}
+
+                                        try {
+                                            val stopIcon = Icon.createWithResource(this, R.drawable.ic_train_mono)
+                                            val setPointIcon = pointClass.methods.firstOrNull { it.name == "setIcon" }
+                                            setPointIcon?.invoke(pointObj, stopIcon)
+                                        } catch (e: Throwable) {}
+
+                                        pointsList.add(pointObj)
+                                    }
                                 }
 
-                                if (pointsList.isNotEmpty()) {
-                                    val setPointsMethod = progressStyleClass.methods.firstOrNull {
-                                        it.name == "setProgressPoints" || it.name == "setPoints"
-                                    }
-                                    setPointsMethod?.invoke(progressStyle, pointsList)
+                                val setPointsMethod = progressStyleClass.methods.firstOrNull { it.name == "setProgressPoints" || it.name == "setPoints" }
+                                if (setPointsMethod != null) {
+                                    setPointsMethod.invoke(progressStyle, pointsList)
                                 }
                             } catch (e: Throwable) {
                                 e.printStackTrace()
                             }
                         }
 
-                        val setStyleMethod = builder.javaClass.getMethod("setStyle", Class.forName("android.app.Notification\$Style"))
+                        val setStyleMethod = builder.javaClass.getMethod("setStyle", Notification.Style::class.java)
                         setStyleMethod.invoke(builder, progressStyle)
+
                     } catch (e: Throwable) {
-                        builder.setStyle(Notification.BigTextStyle().bigText(expandedContent))
-                    }
-                } else {
-                    builder.setStyle(Notification.BigTextStyle().bigText(expandedContent))
-                }
-            }
-
-            if (!isInitial) {
-                builder.setOnlyAlertOnce(true)
-            }
-
-            // RIMOSSI IL CRONOMETRO E IL TIMER CHE DECREMENTAVA
-            if (whenTimestamp > 0) {
-                builder.setWhen(whenTimestamp)
-                builder.setShowWhen(false)
-            }
-
-            if (Build.VERSION.SDK_INT >= 35) {
-                try {
-                    builder.setRequestPromotedOngoing(true)
-                } catch (e: Throwable) {
-                    extras.putBoolean("android.requestPromotedOngoing", true)
-                }
-
-                if (chipText.isNotBlank()) {
-                    try {
-                        builder.setShortCriticalText(chipText)
-                    } catch (e: Throwable) {
-                        extras.putString("android.shortCriticalText", chipText)
+                        e.printStackTrace()
                     }
                 }
-            } else {
-                try {
-                    val setPromotedMethod = builder.javaClass.methods.firstOrNull { it.name == "setRequestPromotedOngoing" }
-                    setPromotedMethod?.invoke(builder, true)
-                } catch (e: Throwable) {
-                    extras.putBoolean("android.requestPromotedOngoing", true)
-                }
-
-                try {
-                    val setShortTextMethod = builder.javaClass.methods.firstOrNull { it.name == "setShortCriticalText" }
-                    setShortTextMethod?.invoke(builder, chipText)
-                } catch (e: Throwable) {
-                    extras.putString("android.shortCriticalText", chipText)
-                }
-            }
-
-            val notif = builder.build()
-            notif.extras.putBoolean("android.requestPromotedOngoing", true)
-            notif.extras.putBoolean("android.promotedOngoing", true)
-            notif.extras.putBoolean("com.samsung.android.notification.live", true)
-            notif.extras.putBoolean("com.samsung.android.notification.promoted", true)
-            if (chipText.isNotBlank()) {
-                notif.extras.putString("android.shortCriticalText", chipText)
-            }
-            notif
-        } else {
-            val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_train_mono)
-                .setContentTitle(title)
-                .setContentText(shortContent)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(expandedContent))
-                .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-                .setOngoing(true)
-                .setProgress(100, progress, false)
-                .addExtras(extras)
-                .setDeleteIntent(stopPendingIntent)
-                .setContentIntent(openAppPendingIntent)
-                .addAction(R.drawable.ic_train_mono, "Apri App", openAppPendingIntent)
-                .addAction(R.drawable.ic_train_mono, "Interrompi", stopPendingIntent)
-
-            if (!isInitial) {
-                builder.setOnlyAlertOnce(true)
             }
 
             builder.build()
+        } else {
+            Notification.Builder(this)
+                .setSmallIcon(R.drawable.ic_train_mono)
+                .setContentTitle(title)
+                .setContentText(shortContent)
+                .setContentIntent(openAppPendingIntent)
+                .setOngoing(true)
+                .build()
         }
-
-        notification.flags = notification.flags or
-                Notification.FLAG_ONGOING_EVENT or
-                Notification.FLAG_NO_CLEAR
 
         return notification
     }
 
-    @SuppressLint("MissingPermission")
+    private fun ensureMediaSessionState(progressPercentage: Int) {
+        if (nativeMediaSession != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                val state = PlaybackState.Builder()
+                    .setActions(PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_SKIP_TO_NEXT)
+                    .setState(
+                        if (progressPercentage >= 100) PlaybackState.STATE_STOPPED else PlaybackState.STATE_PLAYING,
+                        (progressPercentage * 1000).toLong(),
+                        1.0f
+                    )
+                    .build()
+                nativeMediaSession?.setPlaybackState(state)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     private fun notifySafely(trainNumber: String, notification: Notification) {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notifId = getNotificationIdForTrain(trainNumber)
         try {
-            val notifId = getNotificationIdForTrain(trainNumber)
-            NotificationManagerCompat.from(this).notify(notifId, notification)
+            nm.notify(notifId, notification)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("TrainTrackerService", "Errore invio notifica per $trainNumber: ${e.message}")
         }
-    }
-
-    private fun stopTrackingForTrain(trainNum: String) {
-        LiveTrainManager(this).setStoppedForToday(trainNum, true)
-
-        val info = trackedTrains.remove(trainNum)
-        info?.job?.cancel()
-
-        val notifId = getNotificationIdForTrain(trainNum)
-        try {
-            NotificationManagerCompat.from(this).cancel(notifId)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        if (trackedTrains.isEmpty()) {
-            stopAllTracking()
-        }
-    }
-
-    private fun stopAllTracking() {
-        val liveManager = LiveTrainManager(this)
-        trackedTrains.forEach { (num, info) ->
-            liveManager.setStoppedForToday(num, true)
-            info.job.cancel()
-            val notifId = getNotificationIdForTrain(num)
-            try {
-                NotificationManagerCompat.from(this).cancel(notifId)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-        trackedTrains.clear()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                nativeMediaSession?.isActive = false
-                nativeMediaSession?.release()
-                nativeMediaSession = null
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        trackedTrains.forEach { (_, info) -> info.job.cancel() }
-        trackedTrains.clear()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                nativeMediaSession?.isActive = false
-                nativeMediaSession?.release()
-                nativeMediaSession = null
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-        serviceJob.cancel()
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_HIGH
+                "Live Activity In Viaggio",
+                NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Notifica ad alta priorità per il tracciamento live del treno e supporto a capsule nella barra di stato"
+                description = "Notifiche live in tempo reale per lo stato dei treni con aggiornamento continuo."
                 setShowBadge(true)
-                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
-            val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
+
+            val manager = getSystemService(NotificationManager::class.java)
+            manager?.createNotificationChannel(channel)
         }
     }
 
@@ -619,41 +559,5 @@ class TrainTrackerForegroundService : Service() {
         if (timestampMs == null || timestampMs <= 0) return "--:--"
         val sdf = SimpleDateFormat("HH:mm", Locale.ITALY)
         return sdf.format(Date(timestampMs))
-    }
-
-    companion object {
-        const val CHANNEL_ID = "live_train_tracking_channel_v12"
-        const val CHANNEL_NAME = "Tracciamento Treni Live"
-        const val NOTIFICATION_ID_DEFAULT = 1001
-
-        const val ACTION_START_TRACKING = "com.trenilive.app.START_TRACKING"
-        const val ACTION_STOP_TRACKING = "com.trenilive.app.STOP_TRACKING"
-        const val ACTION_REFRESH_NOTIF = "com.trenilive.app.REFRESH_NOTIF"
-
-        const val EXTRA_TRAIN_NUMBER = "extra_train_number"
-        const val EXTRA_STATION_ID = "extra_station_id"
-        const val EXTRA_TIMESTAMP = "extra_timestamp"
-
-        fun startService(context: Context, trainNumber: String, stationId: String? = null, timestamp: String? = null) {
-            val intent = Intent(context, TrainTrackerForegroundService::class.java).apply {
-                action = ACTION_START_TRACKING
-                putExtra(EXTRA_TRAIN_NUMBER, trainNumber)
-                putExtra(EXTRA_STATION_ID, stationId)
-                putExtra(EXTRA_TIMESTAMP, timestamp)
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
-        }
-
-        fun stopService(context: Context, trainNumber: String? = null) {
-            val intent = Intent(context, TrainTrackerForegroundService::class.java).apply {
-                action = ACTION_STOP_TRACKING
-                putExtra(EXTRA_TRAIN_NUMBER, trainNumber)
-            }
-            context.startService(intent)
-        }
     }
 }
