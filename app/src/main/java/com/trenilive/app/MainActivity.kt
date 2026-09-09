@@ -385,11 +385,11 @@ fun TrainTrackerScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "I miei preferiti",
+                    text = "I MIEI PREFERITI",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = 0.5.sp,
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Text(
                     text = "Tieni premuto per rimuovere",
@@ -444,11 +444,11 @@ fun TrainTrackerScreen(
 
         if (recentSearches.isNotEmpty()) {
             Text(
-                text = "Ricerche recenti",
+                text = "RICERCHE RECENTI",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
                 letterSpacing = 0.5.sp,
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
@@ -582,7 +582,7 @@ fun TrainTrackerScreen(
                             contentColor = Color.White
                         )
                     ) {
-                        Text("Cerca treno $trainNumberInput", fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Cerca treno $trainNumberInput", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 15.sp)
                     }
                 }
 
@@ -943,9 +943,10 @@ fun TrainTrackerScreen(
         if (routeSolutions.isNotEmpty() && !isLoading) {
             Spacer(modifier = Modifier.height(20.dp))
             Text(
-                text = "Soluzioni di viaggio disponibili (${routeSolutions.size})",
-                fontSize = 12.sp,
+                text = "SOLUZIONI DI VIAGGIO DISPONIBILI (${routeSolutions.size})",
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 12.dp)
             )
@@ -1089,9 +1090,10 @@ fun TrainTrackerScreen(
                                             }
 
                                             Text(
-                                                text = "Stato in tempo reale",
+                                                text = "STATO IN TEMPO REALE",
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.5.sp,
                                                 color = MaterialTheme.colorScheme.primary
                                             )
 
@@ -1104,20 +1106,20 @@ fun TrainTrackerScreen(
                                                     text = delayText,
                                                     color = delayColor,
                                                     fontWeight = FontWeight.Bold,
-                                                    fontSize = 12.sp,
+                                                    fontSize = 11.sp,
                                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
                                                 )
                                             }
                                         }
 
-                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Spacer(modifier = Modifier.height(8.dp))
 
                                         Text(
-                                            text = "Ultimo rilevamento",
-                                            fontSize = 10.sp,
+                                            text = "ULTIMO RILEVAMENTO",
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            letterSpacing = 0.5.sp
+                                            letterSpacing = 0.5.sp,
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                         Text(
                                             text = legStatus.lastDetectedStation,
@@ -1142,9 +1144,10 @@ fun TrainTrackerScreen(
                                                 ) {
                                                     Column(modifier = Modifier.weight(1f)) {
                                                         Text(
-                                                            text = "Prossima fermata",
-                                                            fontSize = 10.sp,
+                                                            text = "PROSSIMA FERMATA",
+                                                            fontSize = 11.sp,
                                                             fontWeight = FontWeight.Bold,
+                                                            letterSpacing = 0.5.sp,
                                                             color = MaterialTheme.colorScheme.primary
                                                         )
                                                         Text(
@@ -1155,8 +1158,8 @@ fun TrainTrackerScreen(
                                                         )
                                                         nextPlat?.let { platform ->
                                                             Text(
-                                                                text = "Binario: $platform",
-                                                                fontSize = 11.sp,
+                                                                text = "Binario $platform",
+                                                                fontSize = 12.sp,
                                                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                                                             )
                                                         }
@@ -1178,9 +1181,11 @@ fun TrainTrackerScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
                                             Text(
-                                                text = "Avanzamento treno totale",
+                                                text = "AVANZAMENTO TRENO TOTALE",
                                                 fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.5.sp,
+                                                color = MaterialTheme.colorScheme.primary
                                             )
                                             Text(
                                                 text = "${legStatus.progressPercentage}%",
@@ -1243,9 +1248,10 @@ fun TrainTrackerScreen(
                                             ) {
                                                 Column(modifier = Modifier.padding(12.dp)) {
                                                     Text(
-                                                        text = "Tratta selezionata",
+                                                        text = "TRATTA SELEZIONATA",
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.Bold,
+                                                        letterSpacing = 0.5.sp,
                                                         color = MaterialTheme.colorScheme.primary
                                                     )
 
@@ -1450,7 +1456,7 @@ fun TrainTrackerScreen(
                                         )
                                         Text(
                                             text = "Programma nel Tracker",
-                                            fontSize = 13.sp,
+                                            fontSize = 15.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onPrimary
                                         )
@@ -1890,11 +1896,11 @@ fun LiveTrackerScreen(
 
         if (favoriteTrains.isNotEmpty()) {
             Text(
-                text = "Aggiungi rapido dai miei preferiti",
+                text = "AGGIUNGI RAPIDO DAI MIEI PREFERITI",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
                 letterSpacing = 0.5.sp,
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
@@ -1950,9 +1956,10 @@ fun LiveTrackerScreen(
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
-                    text = "Programma un nuovo treno",
+                    text = "PROGRAMMA UN NUOVO TRENO",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp,
                     color = MaterialTheme.colorScheme.primary
                 )
 
@@ -1971,10 +1978,11 @@ fun LiveTrackerScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "GIORNI DI TRACCIAMENTO AUTOMATICO:",
+                    text = "GIORNI DI TRACCIAMENTO AUTOMATICO",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    letterSpacing = 0.5.sp,
+                    color = MaterialTheme.colorScheme.primary
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -2047,7 +2055,7 @@ fun LiveTrackerScreen(
                     if (isAdding) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("Aggiungi a Live Tracker", fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Aggiungi a Live Tracker", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 15.sp)
                     }
                 }
             }
@@ -2056,9 +2064,10 @@ fun LiveTrackerScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "Soluzioni programmate (${liveTrains.size})",
-            fontSize = 12.sp,
+            text = "SOLUZIONI PROGRAMMATE (${liveTrains.size})",
+            fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(bottom = 12.dp)
         )
@@ -2163,7 +2172,6 @@ fun LiveTrackerScreen(
                                     )
                                 }
 
-                                // RIGHE EDIT GIORNI E FERMATE MONITORATE
                                 Column(
                                     modifier = Modifier.padding(top = 8.dp),
                                     verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -2226,7 +2234,6 @@ fun LiveTrackerScreen(
                             )
                         }
 
-                        // DETTAGLI IN TEMPO REALE ESPANDIBILI PER CIASCUNA TRATTA COMPONENTE
                         AnimatedVisibility(
                             visible = isExpanded,
                             enter = fadeIn(),
@@ -2279,6 +2286,7 @@ fun LiveTrackerScreen(
                                                 text = "TRATTA ${idx + 1}: ${leg.category} ${leg.trainNumber} (${leg.originStationName} ➔ ${leg.destinationStationName})",
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.5.sp,
                                                 color = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.padding(bottom = 6.dp, top = if (idx > 0) 12.dp else 0.dp)
                                             )
@@ -2298,9 +2306,10 @@ fun LiveTrackerScreen(
                                                 }
 
                                                 Text(
-                                                    text = "Stato in tempo reale",
+                                                    text = "STATO IN TEMPO REALE",
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold,
+                                                    letterSpacing = 0.5.sp,
                                                     color = MaterialTheme.colorScheme.primary
                                                 )
 
@@ -2313,27 +2322,27 @@ fun LiveTrackerScreen(
                                                         text = delayText,
                                                         color = delayColor,
                                                         fontWeight = FontWeight.Bold,
-                                                        fontSize = 12.sp,
+                                                        fontSize = 11.sp,
                                                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
                                                     )
                                                 }
                                             }
 
-                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Spacer(modifier = Modifier.height(8.dp))
 
                                             Text(
-                                                text = "Ultimo rilevamento",
-                                                fontSize = 10.sp,
+                                                text = "ULTIMO RILEVAMENTO",
+                                                fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                letterSpacing = 0.5.sp
+                                                letterSpacing = 0.5.sp,
+                                                color = MaterialTheme.colorScheme.primary
                                             )
                                             Text(
                                                 text = st.lastDetectedStation,
                                                 fontSize = 15.sp,
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = MaterialTheme.colorScheme.onSurface,
-                                                modifier = Modifier.padding(top = 1.dp, bottom = 8.dp)
+                                                modifier = Modifier.padding(top = 1.dp, bottom = 10.dp)
                                             )
 
                                             st.nextStop?.let { next ->
@@ -2351,9 +2360,10 @@ fun LiveTrackerScreen(
                                                     ) {
                                                         Column(modifier = Modifier.weight(1f)) {
                                                             Text(
-                                                                text = "Prossima fermata",
-                                                                fontSize = 10.sp,
+                                                                text = "PROSSIMA FERMATA",
+                                                                fontSize = 11.sp,
                                                                 fontWeight = FontWeight.Bold,
+                                                                letterSpacing = 0.5.sp,
                                                                 color = MaterialTheme.colorScheme.primary
                                                             )
                                                             Text(
@@ -2364,8 +2374,8 @@ fun LiveTrackerScreen(
                                                             )
                                                             nextPlat?.let { platform ->
                                                                 Text(
-                                                                    text = "Binario: $platform",
-                                                                    fontSize = 11.sp,
+                                                                    text = "Binario $platform",
+                                                                    fontSize = 12.sp,
                                                                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                                                                 )
                                                             }
@@ -2379,7 +2389,7 @@ fun LiveTrackerScreen(
                                                         )
                                                     }
                                                 }
-                                                Spacer(modifier = Modifier.height(8.dp))
+                                                Spacer(modifier = Modifier.height(10.dp))
                                             }
 
                                             Row(
@@ -2387,9 +2397,11 @@ fun LiveTrackerScreen(
                                                 horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
                                                 Text(
-                                                    text = "Avanzamento treno totale",
+                                                    text = "AVANZAMENTO TRENO TOTALE",
                                                     fontSize = 11.sp,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    fontWeight = FontWeight.Bold,
+                                                    letterSpacing = 0.5.sp,
+                                                    color = MaterialTheme.colorScheme.primary
                                                 )
                                                 Text(
                                                     text = "${st.progressPercentage}%",
@@ -2404,7 +2416,7 @@ fun LiveTrackerScreen(
                                                     progress = { st.progressPercentage / 100f },
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .padding(top = 4.dp)
+                                                        .padding(top = 6.dp)
                                                         .height(8.dp)
                                                         .clip(CircleShape),
                                                     color = Color(0xFFC8102E),
@@ -2416,7 +2428,7 @@ fun LiveTrackerScreen(
                                                 Box(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .padding(top = 4.dp)
+                                                        .padding(top = 6.dp)
                                                         .height(8.dp)
                                                         .clip(CircleShape)
                                                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
@@ -2434,6 +2446,7 @@ fun LiveTrackerScreen(
                                 text = "TRATTE COMPONENTI:",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(bottom = 6.dp)
                             )
@@ -2575,9 +2588,10 @@ fun LiveTrackerScreen(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "Opzioni sviluppatore (Debug)",
+                        text = "OPZIONI SVILUPPATORE (DEBUG)",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }
@@ -2626,7 +2640,6 @@ fun LiveTrackerScreen(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-                // SEZIONE DEBUG ALARM MANAGER SISTEMICO POSTA IN FONDO
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -2638,9 +2651,10 @@ fun LiveTrackerScreen(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "Stato Allarmi Schedulati (AlarmManager System Debug)",
-                        fontSize = 12.sp,
+                        text = "STATO ALLARMI SCHEDULATI (ALARM MANAGER DEBUG)",
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -2936,8 +2950,9 @@ fun MonitoredStopsSelectionDialog(
                         if (tempLegsState.size > 1) {
                             Text(
                                 text = "TRATTA ${legIdx + 1}: ${leg.category} ${leg.trainNumber} (${leg.originStationName} ➔ ${leg.destinationStationName})",
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(top = if (legIdx > 0) 12.dp else 0.dp, bottom = 6.dp)
                             )
@@ -3077,7 +3092,7 @@ fun TrainStatusCard(
                         text = delayText,
                         color = delayColor,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }
@@ -3104,7 +3119,7 @@ fun TrainStatusCard(
             ) {
                 Text(
                     text = "${status.category} ${status.trainNumber}",
-                    fontSize = 22.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -3134,7 +3149,7 @@ fun TrainStatusCard(
             ) {
                 Text(
                     text = status.originStationName,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -3149,7 +3164,7 @@ fun TrainStatusCard(
                 )
                 Text(
                     text = status.destinationStationName,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -3161,15 +3176,15 @@ fun TrainStatusCard(
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             Text(
-                text = "Ultimo rilevamento",
+                text = "ULTIMO RILEVAMENTO",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                letterSpacing = 0.5.sp
+                letterSpacing = 0.5.sp,
+                color = MaterialTheme.colorScheme.primary
             )
             Text(
                 text = status.lastDetectedStation,
-                fontSize = 16.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
@@ -3190,20 +3205,21 @@ fun TrainStatusCard(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Prossima fermata",
-                                fontSize = 10.sp,
+                                text = "PROSSIMA FERMATA",
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
                                 text = next.stationName,
-                                fontSize = 16.sp,
+                                fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             nextPlat?.let { platform ->
                                 Text(
-                                    text = "Binario: $platform",
+                                    text = "Binario $platform",
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                                 )
@@ -3212,7 +3228,7 @@ fun TrainStatusCard(
 
                         Text(
                             text = formatTime(next.actualOrEstimatedTimeMs),
-                            fontSize = 20.sp,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -3227,13 +3243,15 @@ fun TrainStatusCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Avanzamento treno totale",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "AVANZAMENTO TRENO TOTALE",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp,
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Text(
                     text = "${status.progressPercentage}%",
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -3295,13 +3313,13 @@ fun TrainStatusCard(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = "Tratta selezionata",
+                                text = "TRATTA SELEZIONATA",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp,
                                 color = MaterialTheme.colorScheme.secondary
                             )
 
-                            // SALITA (CON ORARIO INTACT)
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -3313,13 +3331,13 @@ fun TrainStatusCard(
                                 ) {
                                     Text(
                                         text = "Salita: ",
-                                        fontSize = 13.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSecondaryContainer
                                     )
                                     Text(
                                         text = boardingStop?.stationName ?: userBoardingStation,
-                                        fontSize = 13.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                                         maxLines = 1,
@@ -3329,7 +3347,7 @@ fun TrainStatusCard(
                                     boardingStop?.scheduledTimeMs?.let { ms ->
                                         Text(
                                             text = " (${formatTime(ms)})",
-                                            fontSize = 13.sp,
+                                            fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                                             maxLines = 1
@@ -3340,14 +3358,13 @@ fun TrainStatusCard(
                                 boardingPlatform?.let { p ->
                                     Text(
                                         text = "Binario $p",
-                                        fontSize = 13.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF2E7D32)
                                     )
                                 }
                             }
 
-                            // DISCESA (CON ORARIO INTACT)
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -3359,13 +3376,13 @@ fun TrainStatusCard(
                                 ) {
                                     Text(
                                         text = "Discesa: ",
-                                        fontSize = 13.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSecondaryContainer
                                     )
                                     Text(
                                         text = alightingStop?.stationName ?: userAlightingStation,
-                                        fontSize = 13.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                                         maxLines = 1,
@@ -3375,7 +3392,7 @@ fun TrainStatusCard(
                                     alightingStop?.scheduledTimeMs?.let { ms ->
                                         Text(
                                             text = " (${formatTime(ms)})",
-                                            fontSize = 13.sp,
+                                            fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                                             maxLines = 1
@@ -3386,7 +3403,7 @@ fun TrainStatusCard(
                                 alightingPlatform?.let { p ->
                                     Text(
                                         text = "Binario $p",
-                                        fontSize = 13.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFF2E7D32)
                                     )
@@ -3494,7 +3511,7 @@ fun TrainStatusCard(
                     )
                     Text(
                         text = "Programma nel Tracker",
-                        fontSize = 13.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimary
                     )
