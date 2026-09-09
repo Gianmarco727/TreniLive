@@ -319,6 +319,9 @@ object ViaggiaTrenoService {
         val depHour = depCal.get(Calendar.HOUR_OF_DAY)
         val depMinute = depCal.get(Calendar.MINUTE)
 
+        val todayCal = Calendar.getInstance()
+        val todayDayOfWeek = todayCal.get(Calendar.DAY_OF_WEEK)
+
         val nowMs = System.currentTimeMillis()
 
         try {
@@ -333,6 +336,11 @@ object ViaggiaTrenoService {
                         set(Calendar.MILLISECOND, 0)
                     }
                     val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+
+                    // Se e il giorno di oggi e lo stato del treno e stato scaricato con successo oggi, la giornata di oggi e valida
+                    if (dayOfWeek == todayDayOfWeek && status != null) {
+                        return@async dayOfWeek
+                    }
 
                     val departuresRes = fetchStationDepartures(originStationId, cal.time)
                     val isRunning = if (departuresRes is ViaggiaTrenoResult.Success) {
@@ -534,7 +542,7 @@ object ViaggiaTrenoService {
                     departureStationId = departureStationId,
                     timestamp = departureTimestampMs.toString(),
                     delayMinutes = 0,
-                    isCancelled = false, // Una corsa futura programmata per domani NON è soppressa solo perché la corsa di oggi è stata soppressa
+                    isCancelled = false, // Una corsa futura programmata per domani NON e soppressa solo perche la corsa di oggi e stata soppressa
                     cancellationReason = null,
                     lastDetectedStation = "Programmato per il $formattedDate",
                     stops = futureStops,
@@ -757,7 +765,6 @@ object ViaggiaTrenoService {
 
                     val boardingStop = stops[originIdx]
 
-                    // Filtra treni soppressi o gia arrivati a destinazione SOLO se la ricerca riguarda la giornata di OGGI
                     if (isSearchToday && (status.isCancelled || status.progressPercentage >= 100)) continue
                     val boardMs = boardingStop.scheduledTimeMs ?: 0L
                     if (boardMs < date.time - 5 * 60 * 1000L) continue

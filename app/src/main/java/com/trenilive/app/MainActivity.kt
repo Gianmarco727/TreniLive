@@ -880,7 +880,6 @@ fun TrainTrackerScreen(
             }
         }
 
-        // LISTA SOLUZIONI TROVATE (UNIFORMATO COLORE BLU SFONDO SCHEDA A 0xFF1C2D4F E RIMOSSO PALLINO ROSSO STOP INDICATOR)
         if (routeSolutions.isNotEmpty() && !isLoading) {
             Spacer(modifier = Modifier.height(20.dp))
             Text(
@@ -915,7 +914,7 @@ fun TrainTrackerScreen(
                             .padding(16.dp)
                             .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
                     ) {
-                        // INTESTAZIONE CARD
+                        // INTESTAZIONE CARD CON PULSANTE PREFERITI
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -933,7 +932,6 @@ fun TrainTrackerScreen(
                                         color = MaterialTheme.colorScheme.primary
                                     )
 
-                                    // Badge Cambi / Diretto
                                     Surface(
                                         color = if (isDirect) Color(0xFF2E7D32).copy(alpha = 0.15f) else Color(0xFFE65100).copy(alpha = 0.15f),
                                         shape = RoundedCornerShape(12.dp)
@@ -967,6 +965,42 @@ fun TrainTrackerScreen(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+
+                            val isSolutionFavorite = if (isDirect && singleLeg != null) {
+                                favoritesManager.isFavorite(singleLeg.trainNumber)
+                            } else {
+                                solution.legs.isNotEmpty() && solution.legs.all { favoritesManager.isFavorite(it.trainNumber) }
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    if (isDirect && singleLeg != null) {
+                                        favoritesManager.toggleFavorite(singleLeg.trainNumber)
+                                    } else {
+                                        val allFav = solution.legs.all { favoritesManager.isFavorite(it.trainNumber) }
+                                        solution.legs.forEach { leg ->
+                                            if (allFav) {
+                                                if (favoritesManager.isFavorite(leg.trainNumber)) {
+                                                    favoritesManager.toggleFavorite(leg.trainNumber)
+                                                }
+                                            } else {
+                                                if (!favoritesManager.isFavorite(leg.trainNumber)) {
+                                                    favoritesManager.toggleFavorite(leg.trainNumber)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    favoriteList = favoritesManager.getFavoriteTrains()
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isSolutionFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                    contentDescription = "Preferito",
+                                    tint = if (isSolutionFavorite) Color(0xFFC8102E) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
@@ -1084,7 +1118,7 @@ fun TrainTrackerScreen(
                                             Spacer(modifier = Modifier.height(10.dp))
                                         }
 
-                                        // 4. BARRA DI PROGRESSO AVANZAMENTO TRENO (SENZA PALLINO ROSSO STOP INDICATOR M3)
+                                        // 4. BARRA DI PROGRESSO MATERIAL 3 AVANZAMENTO TRENO (SENZA PALLINO ROSSO STOP INDICATOR M3)
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween
@@ -2048,26 +2082,51 @@ fun LiveTrackerScreen(
                                 }
 
                                 Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    modifier = Modifier
-                                        .padding(top = 6.dp)
-                                        .clickable {
+                                    modifier = Modifier.padding(top = 6.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.clickable {
                                             selectedConfigForDays = config
                                         }
-                                ) {
-                                    Text(
-                                        text = "📅 ${config.getDaysFormatted()}",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Outlined.Edit,
-                                        contentDescription = "Modifica giorni",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(14.dp)
-                                    )
+                                    ) {
+                                        Text(
+                                            text = "📅 ${config.getDaysFormatted()}",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Outlined.Edit,
+                                            contentDescription = "Modifica giorni",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.clickable {
+                                            selectedConfigForStops = config
+                                        }
+                                    ) {
+                                        Text(
+                                            text = "📍 Fermate (${config.monitoredStops.size}/4)",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.secondary
+                                        )
+                                        Icon(
+                                            imageVector = Icons.Outlined.Edit,
+                                            contentDescription = "Modifica fermate",
+                                            tint = MaterialTheme.colorScheme.secondary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
                                 }
                             }
 
