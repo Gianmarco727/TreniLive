@@ -2276,7 +2276,7 @@ fun LiveTrackerScreen(
 
                                         if (effLegs.size > 1) {
                                             Text(
-                                                text = "STATO IN TEMPO REALE - TRATTA ${idx + 1}: ${leg.category} ${leg.trainNumber}",
+                                                text = "TRATTA ${idx + 1}: ${leg.category} ${leg.trainNumber} (${leg.originStationName} ➔ ${leg.destinationStationName})",
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.primary,
@@ -2298,10 +2298,10 @@ fun LiveTrackerScreen(
                                                 }
 
                                                 Text(
-                                                    text = "Tratta ${leg.originStationName} ➔ ${leg.destinationStationName}",
+                                                    text = "Stato in tempo reale",
                                                     fontSize = 11.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
                                                 )
 
                                                 Surface(
@@ -3180,7 +3180,7 @@ fun TrainStatusCard(
 
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
