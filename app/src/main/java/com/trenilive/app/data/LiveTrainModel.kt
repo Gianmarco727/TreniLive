@@ -34,7 +34,7 @@ data class LiveTrainConfig(
     val legs: List<LiveTrainLeg> = emptyList() // Supporto tratte componenti per le soluzioni con cambi
 ) {
     /**
-     * Restituisce la lista effettiva delle tratte. Se `legs` è vuoto (treno singolo retrocompatibile),
+     * Restituisce la lista effettiva delle tratte. Se `legs` e vuoto (treno singolo retrocompatibile),
      * genera una singola tratta sintetica basata sui campi principali del `LiveTrainConfig`.
      */
     fun getEffectiveLegs(): List<LiveTrainLeg> {
@@ -56,6 +56,17 @@ data class LiveTrainConfig(
                 )
             )
         }
+    }
+
+    /**
+     * Restituisce la lista effettiva delle fermate monitorate combinando le fermate di tutte le tratte.
+     */
+    fun getEffectiveMonitoredStops(): List<MonitoredStop> {
+        if (monitoredStops.isNotEmpty()) {
+            return monitoredStops
+        }
+        val effLegs = getEffectiveLegs()
+        return effLegs.flatMap { it.monitoredStops }.distinctBy { it.stationId }.take(4)
     }
 
     /**

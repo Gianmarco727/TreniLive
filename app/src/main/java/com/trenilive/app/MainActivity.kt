@@ -1499,7 +1499,9 @@ private suspend fun programRouteSolutionInLiveTracker(
         )
     }
 
+    val primaryMonitoredStops = savedLegs.flatMap { it.monitoredStops }.distinctBy { it.stationId }.take(4)
     val primaryTrainNum = solution.legs.joinToString(" + ") { it.trainNumber }
+
     val newConfig = LiveTrainConfig(
         id = UUID.randomUUID().toString(),
         trainNumber = primaryTrainNum,
@@ -1509,6 +1511,7 @@ private suspend fun programRouteSolutionInLiveTracker(
         destinationStationName = solution.destinationStationName,
         scheduledDepartureTime = solution.departureTimeFormatted,
         isEnabled = true,
+        monitoredStops = primaryMonitoredStops,
         legs = savedLegs
     )
 
@@ -1673,6 +1676,19 @@ fun LiveTrackerScreen(
                         when (val statusRes = ViaggiaTrenoService.fetchTrainStatus(num, stationId, timestamp)) {
                             is ViaggiaTrenoResult.Success -> {
                                 val status = statusRes.data
+                                val autoMonitoredStops = mutableListOf<MonitoredStop>()
+                                val totalStopsCount = status.stops.size
+                                if (totalStopsCount > 1) {
+                                    val boardingStop = status.stops.firstOrNull()
+                                    val alightingStop = status.stops.lastOrNull()
+                                    if (boardingStop != null) {
+                                        autoMonitoredStops.add(MonitoredStop(boardingStop.stationId, boardingStop.stationName, 0))
+                                    }
+                                    if (alightingStop != null && alightingStop.stationId != boardingStop?.stationId) {
+                                        autoMonitoredStops.add(MonitoredStop(alightingStop.stationId, alightingStop.stationName, 100))
+                                    }
+                                }
+
                                 val newConfig = LiveTrainConfig(
                                     id = UUID.randomUUID().toString(),
                                     trainNumber = num,
@@ -1681,7 +1697,8 @@ fun LiveTrackerScreen(
                                     originStationName = status.originStationName,
                                     destinationStationName = status.destinationStationName,
                                     scheduledDepartureTime = status.stops.firstOrNull()?.scheduledTimeMs?.let { formatTime(it) } ?: "",
-                                    isEnabled = true
+                                    isEnabled = true,
+                                    monitoredStops = autoMonitoredStops
                                 )
                                 liveTrains = liveManager.saveLiveTrain(newConfig)
                                 inputTrainNumber = ""
@@ -2115,7 +2132,7 @@ fun LiveTrackerScreen(
                                         }
                                     ) {
                                         Text(
-                                            text = "📍 Fermate monitorate (${config.monitoredStops.size}/4)",
+                                            text = "📍 Fermate monitorate (${config.getEffectiveMonitoredStops().size}/4)",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.secondary
@@ -2450,7 +2467,7 @@ fun MonitoredStopsSelectionDialog(
     var isLoadingStops by remember { mutableStateOf(true) }
     var stopsError by remember { mutableStateOf<String?>(null) }
     var availableStops by remember { mutableStateOf<List<TrainStop>>(emptyList()) }
-    var tempSelectedStops by remember { mutableStateOf(config.monitoredStops) }
+    var tempSelectedStops by remember { mutableStateOf(config.getEffectiveMonitoredStops()) }
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -2459,7 +2476,8 @@ fun MonitoredStopsSelectionDialog(
         stopsError = null
 
         coroutineScope.launch {
-            when (val resolveRes = ViaggiaTrenoService.resolveTrain(config.trainNumber)) {
+            val primaryTrainNum = config.getEffectiveLegs().firstOrNull()?.trainNumber ?: config.trainNumber
+            when (val resolveRes = ViaggiaTrenoService.resolveTrain(primaryTrainNum)) {
                 is ViaggiaTrenoResult.Success -> {
                     val (num, stationId, timestamp) = resolveRes.data
                     when (val statusRes = ViaggiaTrenoService.fetchTrainStatus(num, stationId, timestamp)) {
