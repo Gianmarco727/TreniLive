@@ -45,13 +45,28 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 }
 
+data class LegAlarmDebugInfo(
+    val trainNumber: String,
+    val originName: String,
+    val destinationName: String,
+    val requestCode: Int,
+    val isPendingIntentRegisteredInOS: Boolean,
+    val nextAlarmMs: Long?,
+    val isActiveInTravelWindow: Boolean
+)
+
+data class SystemAlarmDebugSummary(
+    val systemNextAlarmClockFormatted: String?,
+    val legsDebugInfo: List<LegAlarmDebugInfo>
+)
+
 object LiveTrainScheduler {
 
     const val ACTION_START_TRAIN_ALARM = "com.trenilive.app.ACTION_START_TRAIN_ALARM"
     const val EXTRA_TRAIN_NUMBER = "extra_train_number"
     const val EXTRA_STATION_ID = "extra_station_id"
 
-    private fun getAlarmReqCode(trainNum: String, legIndex: Int = 0): Int {
+    fun getAlarmReqCode(trainNum: String, legIndex: Int = 0): Int {
         val clean = trainNum.replace("[^0-9]".toRegex(), "")
         val parsed = clean.toIntOrNull()
         val base = if (parsed != null && parsed in 1..99999) {
@@ -138,6 +153,64 @@ object LiveTrainScheduler {
 
     fun isTrainInActiveWindow(config: LiveTrainConfig, context: Context): Boolean {
         return config.getEffectiveLegs().any { isLegInActiveWindow(it, config, context) }
+    }
+
+    fun getScheduledAlarmsDebugInfo(context: Context): SystemAlarmDebugSummary {
+        val manager = LiveTrainManager(context)
+        val liveTrains = manager.getLiveTrains()
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+
+        val systemNextAlarmClock = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                alarmManager?.nextAlarmClock?.triggerTime
+            } catch (e: Exception) {
+                null
+            }
+        } else null
+
+        val systemNextAlarmFormatted = systemNextAlarmClock?.let {
+            SimpleDateFormat("EEE dd/MM/yyyy 'alle' HH:mm:ss", Locale.ITALY).format(Date(it))
+        }
+
+        val legsInfo = mutableListOf<LegAlarmDebugInfo>()
+
+        liveTrains.filter { it.isEnabled }.forEach { config ->
+            config.getEffectiveLegs().forEachIndexed { legIndex, leg ->
+                val reqCode = getAlarmReqCode(leg.trainNumber, legIndex)
+                val intent = Intent(context, AlarmReceiver::class.java).apply {
+                    action = ACTION_START_TRAIN_ALARM
+                    putExtra(EXTRA_TRAIN_NUMBER, leg.trainNumber)
+                    putExtra(EXTRA_STATION_ID, leg.originStationId)
+                }
+                val existingPendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    reqCode,
+                    intent,
+                    PendingIntent.FLAG_NO_CREATE or (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+                )
+
+                val isRegisteredInOS = existingPendingIntent != null
+                val nextAlarmMs = calculateNextAlarmTimeMsForLeg(leg, config)
+                val isActiveInWindow = isLegInActiveWindow(leg, config, context)
+
+                legsInfo.add(
+                    LegAlarmDebugInfo(
+                        trainNumber = leg.trainNumber,
+                        originName = leg.originStationName,
+                        destinationName = leg.destinationStationName,
+                        requestCode = reqCode,
+                        isPendingIntentRegisteredInOS = isRegisteredInOS,
+                        nextAlarmMs = nextAlarmMs,
+                        isActiveInTravelWindow = isActiveInWindow
+                    )
+                )
+            }
+        }
+
+        return SystemAlarmDebugSummary(
+            systemNextAlarmClockFormatted = systemNextAlarmFormatted,
+            legsDebugInfo = legsInfo
+        )
     }
 
     fun scheduleAlarmsAndCheckActiveTrains(context: Context) {
