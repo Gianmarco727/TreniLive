@@ -192,7 +192,7 @@ class TrainTrackerForegroundService : Service() {
                 } catch (e: Exception) {
                     Log.e("TrainTrackerService", "Errore tracciamento $trainNumber: ${e.message}")
                 }
-                delay(15_000) // Polling ogni 15s
+                delay(30_000) // Polling ogni 30s per il servizio in background (allineato con CACHE_TTL di ViaggiaTreno)
             }
         }
 
