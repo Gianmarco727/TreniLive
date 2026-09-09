@@ -19,6 +19,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -173,6 +174,12 @@ fun TrainTrackerScreen(
     var destinationQuery by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     var selectedDestinationStation by remember { mutableStateOf<StationInfo?>(null) }
     var destinationSuggestions by remember { mutableStateOf<List<StationInfo>>(emptyList()) }
+
+    var isSwappingStations by remember { mutableStateOf(false) }
+    val swapRotationAngle by animateFloatAsState(
+        targetValue = if (isSwappingStations) 180f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+    )
 
     var selectedDateMs by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
 
@@ -453,6 +460,7 @@ fun TrainTrackerScreen(
                 recentSearches.forEach { search ->
                     SuggestionChip(
                         onClick = {
+                            // AUTO-COMPILA I CAMPI SENZA LANCIARE LA RICERCA
                             originQuery = TextFieldValue(
                                 text = search.originName,
                                 selection = TextRange(search.originName.length)
@@ -463,8 +471,6 @@ fun TrainTrackerScreen(
                             )
                             selectedOriginStation = null
                             selectedDestinationStation = null
-                            selectedDateMs = System.currentTimeMillis()
-                            searchByStations()
                         },
                         label = {
                             Row(
@@ -683,7 +689,61 @@ fun TrainTrackerScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                // PULSANTE DI INVERSIONE / SWITCH CON ANIMAZIONE
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HorizontalDivider(
+                        modifier = Modifier.weight(1f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
+                    )
+
+                    Surface(
+                        onClick = {
+                            isSwappingStations = !isSwappingStations
+
+                            val tempQuery = originQuery
+                            originQuery = destinationQuery
+                            destinationQuery = tempQuery
+
+                            val tempStation = selectedOriginStation
+                            selectedOriginStation = selectedDestinationStation
+                            selectedDestinationStation = tempStation
+
+                            originSuggestions = emptyList()
+                            destinationSuggestions = emptyList()
+                        },
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        shadowElevation = 2.dp,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .graphicsLayer {
+                                    rotationZ = swapRotationAngle
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SwapVert,
+                                contentDescription = "Inverti stazioni",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(
+                        modifier = Modifier.weight(1f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
+                    )
+                }
 
                 OutlinedTextField(
                     value = destinationQuery,
@@ -2555,7 +2615,7 @@ fun LiveTrackerScreen(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-                // SEZIONE DEBUG ALARM MANAGER SISTEMICO
+                // SEZIONE DEBUG ALARM MANAGER SISTEMICO POSTA IN FONDO
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
