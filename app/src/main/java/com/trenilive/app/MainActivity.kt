@@ -2172,6 +2172,101 @@ fun LiveTrackerScreen(
                             )
                         }
 
+                        // SEZIONE DEBUG ALARM MANAGER
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(14.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Schedule,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Allarmi Schedulati (AlarmManager Debug)",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                if (!config.isEnabled) {
+                                    Text(
+                                        text = "Disattivato dall'utente (nessun allarme schedulato)",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                } else {
+                                    effLegs.forEachIndexed { idx, leg ->
+                                        val nextAlarmMs = LiveTrainScheduler.calculateNextAlarmTimeMsForLeg(leg, config)
+                                        val isActiveNow = LiveTrainScheduler.isLegInActiveWindow(leg, config, context)
+
+                                        Column(modifier = Modifier.padding(top = 6.dp)) {
+                                            if (effLegs.size > 1) {
+                                                Text(
+                                                    text = "Tratta ${idx + 1} (${leg.trainNumber}):",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
+
+                                            if (isActiveNow) {
+                                                Surface(
+                                                    color = Color(0xFF2E7D32).copy(alpha = 0.15f),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    modifier = Modifier.padding(vertical = 2.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "⚡ NOTIFICA LIVE ATTIVA IN QUESTO MOMENTO",
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF2E7D32),
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            if (nextAlarmMs != null) {
+                                                val alarmDateStr = SimpleDateFormat("EEE dd/MM/yyyy 'alle' HH:mm", Locale.ITALY).format(Date(nextAlarmMs))
+                                                val depTimeMs = nextAlarmMs + 15 * 60 * 1000L
+                                                val depTimeStr = SimpleDateFormat("HH:mm", Locale.ITALY).format(Date(depTimeMs))
+
+                                                Text(
+                                                    text = "🔔 Prossimo allarme: $alarmDateStr",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = "💡 (Attivazione notifica con 15 min di preavviso per partenza delle $depTimeStr)",
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            } else {
+                                                Text(
+                                                    text = "⚠️ Nessun allarme imminente schedulato nei prossimi 7 giorni per questa tratta.",
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.error
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // DETTAGLI IN TEMPO REALE ESPANDIBILI
                         AnimatedVisibility(
                             visible = isExpanded,
