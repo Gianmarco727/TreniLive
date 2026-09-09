@@ -1561,6 +1561,7 @@ fun LiveTrackerScreen(
 
     var selectedConfigForStops by remember { mutableStateOf<LiveTrainConfig?>(null) }
     var selectedConfigForDays by remember { mutableStateOf<LiveTrainConfig?>(null) }
+    var expandedLiveTrainId by remember { mutableStateOf<String?>(null) }
     var isSamsungHintDismissed by remember { mutableStateOf(liveManager.isSamsungHintDismissed()) }
 
     val coroutineScope = rememberCoroutineScope()
@@ -2024,15 +2025,24 @@ fun LiveTrackerScreen(
         } else {
             liveTrains.forEach { config ->
                 val effLegs = config.getEffectiveLegs()
+                val isExpanded = expandedLiveTrainId == config.id
 
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 12.dp),
+                        .padding(bottom = 12.dp)
+                        .clickable {
+                            expandedLiveTrainId = if (isExpanded) null else config.id
+                        },
                     shape = RoundedCornerShape(24.dp),
+                    border = if (isExpanded) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -2047,6 +2057,7 @@ fun LiveTrackerScreen(
                                     text = if (effLegs.size > 1) "Soluzione ${config.getDisplayTrainNumbers()}" else "Treno ${config.trainNumber}",
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -2098,9 +2109,9 @@ fun LiveTrackerScreen(
                                     )
                                 }
 
-                                // DISPOSIZIONE SU RIGHE SEPARATE PER GIORNI E FERMATE MONITORATE
+                                // RIGHE EDIT GIORNI E FERMATE MONITORATE
                                 Column(
-                                    modifier = Modifier.padding(top = 6.dp),
+                                    modifier = Modifier.padding(top = 8.dp),
                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Row(
@@ -2159,6 +2170,191 @@ fun LiveTrackerScreen(
                                     }
                                 }
                             )
+                        }
+
+                        // DETTAGLI IN TEMPO REALE ESPANDIBILI
+                        AnimatedVisibility(
+                            visible = isExpanded,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            var liveStatus by remember { mutableStateOf<TrainStatus?>(null) }
+                            var isLiveLoading by remember { mutableStateOf(false) }
+
+                            LaunchedEffect(config.id) {
+                                isLiveLoading = true
+                                val primaryLeg = effLegs.firstOrNull()
+                                val targetNum = primaryLeg?.trainNumber ?: config.trainNumber
+                                when (val resolveRes = ViaggiaTrenoService.resolveTrain(targetNum)) {
+                                    is ViaggiaTrenoResult.Success -> {
+                                        val (num, stationId, timestamp) = resolveRes.data
+                                        when (val statusRes = ViaggiaTrenoService.fetchTrainStatus(num, stationId, timestamp)) {
+                                            is ViaggiaTrenoResult.Success -> {
+                                                liveStatus = statusRes.data
+                                            }
+                                            is ViaggiaTrenoResult.Error -> {}
+                                        }
+                                    }
+                                    is ViaggiaTrenoResult.Error -> {}
+                                }
+                                isLiveLoading = false
+                            }
+
+                            Column(modifier = Modifier.padding(top = 12.dp)) {
+                                HorizontalDivider(modifier = Modifier.padding(bottom = 12.dp))
+
+                                if (isLiveLoading) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 12.dp),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Caricamento stato in tempo reale...", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                } else liveStatus?.let { status ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        val (delayColor, delayText) = when {
+                                            status.isCancelled -> Color(0xFFD32F2F) to "SOPPRESSO"
+                                            status.delayMinutes > 0 -> Color(0xFFE65100) to "+${status.delayMinutes} min"
+                                            status.delayMinutes < 0 -> Color(0xFF2E7D32) to "${status.delayMinutes} min"
+                                            else -> Color(0xFF2E7D32) to "IN ORARIO"
+                                        }
+
+                                        Text(
+                                            text = "Stato in tempo reale",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+
+                                        Surface(
+                                            color = delayColor.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(20.dp),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, delayColor)
+                                        ) {
+                                            Text(
+                                                text = delayText,
+                                                color = delayColor,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    Text(
+                                        text = "Ultimo rilevamento",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Text(
+                                        text = status.lastDetectedStation,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(top = 1.dp, bottom = 10.dp)
+                                    )
+
+                                    status.nextStop?.let { next ->
+                                        val nextPlat = (next.actualPlatform ?: next.scheduledPlatform)?.takeIf { !it.equals("null", ignoreCase = true) && it.isNotBlank() }
+
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                            shape = RoundedCornerShape(14.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = "Prossima fermata",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                    Text(
+                                                        text = next.stationName,
+                                                        fontSize = 15.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                    )
+                                                    nextPlat?.let { platform ->
+                                                        Text(
+                                                            text = "Binario: $platform",
+                                                            fontSize = 11.sp,
+                                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                                        )
+                                                    }
+                                                }
+
+                                                Text(
+                                                    text = formatTime(next.actualOrEstimatedTimeMs),
+                                                    fontSize = 18.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "Avanzamento treno totale",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = "${status.progressPercentage}%",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+
+                                    if (status.progressPercentage > 0) {
+                                        LinearProgressIndicator(
+                                            progress = { status.progressPercentage / 100f },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = 6.dp)
+                                                .height(8.dp)
+                                                .clip(CircleShape),
+                                            color = Color(0xFFC8102E),
+                                            trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                            strokeCap = StrokeCap.Round,
+                                            drawStopIndicator = {}
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = 6.dp)
+                                                .height(8.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                        )
+                                    }
+                                }
+                            }
                         }
 
                         if (effLegs.size > 1) {
@@ -2545,6 +2741,8 @@ fun MonitoredStopsSelectionDialog(
                             else -> ((idx.toFloat() / (totalCount - 1).toFloat()) * 100).toInt().coerceIn(0, 100)
                         }
 
+                        val stopTimeStr = formatTime(stop.scheduledTimeMs)
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -2580,7 +2778,7 @@ fun MonitoredStopsSelectionDialog(
 
                             Column(modifier = Modifier.padding(start = 8.dp)) {
                                 Text(
-                                    text = stop.stationName,
+                                    text = "${stop.stationName} ($stopTimeStr)",
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = if (isMaxReached) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onSurface
