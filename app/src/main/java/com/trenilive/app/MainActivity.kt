@@ -2081,10 +2081,10 @@ fun LiveTrackerScreen(
                                     )
                                 }
 
-                                Row(
+                                // DISPOSIZIONE SU RIGHE SEPARATE PER GIORNI E FERMATE MONITORATE
+                                Column(
                                     modifier = Modifier.padding(top = 6.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -2115,7 +2115,7 @@ fun LiveTrackerScreen(
                                         }
                                     ) {
                                         Text(
-                                            text = "📍 Fermate (${config.monitoredStops.size}/4)",
+                                            text = "📍 Fermate monitorate (${config.monitoredStops.size}/4)",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.secondary
