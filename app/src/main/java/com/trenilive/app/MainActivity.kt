@@ -61,9 +61,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.trenilive.app.data.*
 import com.trenilive.app.service.LiveTrainScheduler
 import com.trenilive.app.service.TrainTrackerForegroundService
+import com.trenilive.app.ui.SearchViewModel
 import com.trenilive.app.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -157,7 +159,8 @@ fun MainTabScreen(modifier: Modifier = Modifier) {
 @Composable
 fun TrainTrackerScreen(
     modifier: Modifier = Modifier,
-    onSwitchToLiveTracker: () -> Unit = {}
+    onSwitchToLiveTracker: () -> Unit = {},
+    searchViewModel: SearchViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val favoritesManager = remember { FavoritesManager(context) }
@@ -185,12 +188,11 @@ fun TrainTrackerScreen(
 
     var selectedDateMs by rememberSaveable { mutableLongStateOf(System.currentTimeMillis()) }
 
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var trainStatus by remember { mutableStateOf<TrainStatus?>(null) }
-    var routeSolutions by remember { mutableStateOf<List<RouteSolution>>(emptyList()) }
-
-    var expandedSolutionId by remember { mutableStateOf<String?>(null) }
+    var isLoading by searchViewModel::isLoading
+    var errorMessage by searchViewModel::errorMessage
+    var trainStatus by searchViewModel::trainStatus
+    var routeSolutions by searchViewModel::routeSolutions
+    var expandedSolutionId by searchViewModel::expandedSolutionId
 
     val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
